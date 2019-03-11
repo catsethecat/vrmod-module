@@ -13,7 +13,7 @@ typedef void(*msg)(char const* pMsg, ...);
 msg Msg = nullptr;
 
 //*************************************************************************
-//							gl extensions
+//                             gl extensions
 //*************************************************************************
 PFNGLCREATESHADERPROC glCreateShader;
 PFNGLSHADERSOURCEPROC glShaderSource;
@@ -72,7 +72,7 @@ void loadExtensions() {
 }
 
 //*************************************************************************
-//							gl helper functions
+//                             gl helper functions
 //*************************************************************************
 int compileShader(GLuint shader, const GLchar* source) {
 	GLint success = 0;
@@ -135,7 +135,7 @@ GLuint createTexture(GLsizei width, GLsizei height, const GLvoid* data) {
 }
 
 //*************************************************************************
-//							shader sources
+//                             shader sources
 //*************************************************************************
 
 const char vertexShaderSource[] =
@@ -161,7 +161,7 @@ const char fragmentShaderSource[] =
 "}";
 
 //*************************************************************************
-//							other globals
+//                             other globals
 //*************************************************************************
 
 //openvr related
@@ -194,7 +194,7 @@ int width = 0;
 int height = 0;
 
 //*************************************************************************
-//							mirrorInit
+//                             mirrorInit
 //*************************************************************************
 
 void mirrorInit() {
@@ -353,7 +353,7 @@ void mirrorInit() {
 }
 
 //*************************************************************************
-//						LUA VRMOD_MirrorFrame
+//                           LUA VRMOD_MirrorFrame
 //*************************************************************************
 LUA_FUNCTION(VRMOD_MirrorFrame) {
 	if (!mirrorInitialized)
@@ -399,7 +399,7 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_Init
+//                             LUA VRMOD_Init
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Init) {
 	if (!LUA->IsType(1, GarrysMod::Lua::Type::NUMBER) || pSystem != NULL) {
@@ -453,7 +453,7 @@ LUA_FUNCTION(VRMOD_Init) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_Shutdown
+//                            LUA VRMOD_Shutdown
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Shutdown) {
 	vr::VR_Shutdown();
@@ -462,7 +462,7 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_UpdatePoses
+//                            LUA VRMOD_UpdatePoses
 //*************************************************************************
 LUA_FUNCTION(VRMOD_UpdatePoses) {
 	if (mirrorInitialized) {
@@ -475,7 +475,7 @@ LUA_FUNCTION(VRMOD_UpdatePoses) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_GetHMDPose
+//                             LUA VRMOD_GetHMDPose
 //*************************************************************************
 //TODO merge this and GetControllerPoses?
 LUA_FUNCTION(VRMOD_GetHMDPose) {
@@ -501,7 +501,7 @@ LUA_FUNCTION(VRMOD_GetHMDPose) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_GetControllerPoses
+//                          LUA VRMOD_GetControllerPoses
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetControllerPoses) {
 	Vector pos;
@@ -528,7 +528,7 @@ LUA_FUNCTION(VRMOD_GetControllerPoses) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_GetActionStates
+//                          LUA VRMOD_GetActionStates
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetActionStates) {
 	int action1_state = 0;
@@ -560,7 +560,7 @@ LUA_FUNCTION(VRMOD_GetActionStates) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_SetDisplayOffset
+//                        LUA VRMOD_SetDisplayOffset
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER))
@@ -569,7 +569,7 @@ LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_GetIPD
+//                           LUA VRMOD_GetIPD
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetIPD) {
 	vr::HmdMatrix34_t eyeToHeadRight = pSystem->GetEyeToHeadTransform(vr::Eye_Right); //units are in meters
@@ -579,7 +579,7 @@ LUA_FUNCTION(VRMOD_GetIPD) {
 }
 
 //*************************************************************************
-//						LUA VRMOD_HMDPresent
+//                        LUA VRMOD_HMDPresent
 //*************************************************************************
 LUA_FUNCTION(VRMOD_HMDPresent) {
 	LUA->PushBool(vr::VR_IsHmdPresent());
@@ -588,7 +588,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 
 
 //*************************************************************************
-//						
+//
 //*************************************************************************
 GMOD_MODULE_OPEN()
 {
