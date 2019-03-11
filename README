@@ -6,3 +6,4 @@ The relevant files are in the distrib folder. Read "INSTALLATION.txt" for instru
 
 To compile with visual studio: add the source files to your project and make sure the project is configured to produce a .dll
 you also need to link openvr_api.lib and include the OpenVR headers, available at https://github.com/ValveSoftware/openvr
+and the gmod lua headers https://github.com/Facepunch/gmod-module-base/tree/development
