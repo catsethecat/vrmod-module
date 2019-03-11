@@ -321,7 +321,8 @@ void mirrorInit() {
 	height = rect.bottom;
 	gameWindowHDC = GetDC(hwnd);
 	if (gameWindowHDC == NULL) {
-		Msg("Error: game window GetDC\n"); getchar(); return;
+		Msg("Error: game window GetDC\n");
+		return;
 	}
 	bitmapHDC = CreateCompatibleDC(gameWindowHDC);
 	BITMAPINFOHEADER bmi = { 0 };
