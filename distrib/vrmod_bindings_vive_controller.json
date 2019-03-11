@@ -1,0 +1,47 @@
+{
+   "bindings" : {
+      "/actions/vrmod" : {
+         "sources" : [
+            {
+              "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/action1"
+                  }
+               },
+               "mode" : "button",
+               "path" : "/user/hand/right/input/trigger"
+            },
+            {
+                "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/action2"
+                  }
+               },
+               "mode" : "button",
+               "path" : "/user/hand/right/input/application_menu"
+            },
+            {
+                "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/action3"
+                  }
+               },
+               "mode" : "button",
+               "path" : "/user/hand/right/input/trackpad"
+            },
+            {
+                "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/action4"
+                  }
+               },
+               "mode" : "button",
+               "path" : "/user/hand/right/input/grip"
+            }
+         ]
+      }
+   },
+   "controller_type" : "vive_controller",
+   "description" : "default vrmod bindings",
+   "name" : "default vrmod bindings"
+}

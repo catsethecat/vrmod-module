@@ -1,0 +1,35 @@
+{
+  "default_bindings": [
+   {
+      "controller_type": "vive_controller",
+      "binding_url": "vrmod_bindings_vive_controller.json"
+   }
+  ], 
+  "actions": [
+    {
+      "name": "/actions/vrmod/in/action1",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/action2",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/action3",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/action4",
+      "type": "boolean"
+    }
+  ],
+  "localization" : [
+   {
+       "language_tag": "en",
+        "/actions/vrmod/in/action1" : "action1 fancyname",
+        "/actions/vrmod/in/action2" : "action2 fancyname",
+	"/actions/vrmod/in/action3" : "action3 fancyname",
+	"/actions/vrmod/in/action4" : "action4 fancyname"
+    }
+  ]
+}
