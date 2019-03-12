@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <Windows.h>
 #include <gl/GL.h>
-#include "glext.h"
-#include "wglext.h"
+#include "GL/glext.h"
+#include "GL/wglext.h"
 #include <openvr.h>
 
 #pragma comment(lib, "opengl32.lib")
