@@ -5,5 +5,7 @@ If you just want to use the module with VRMod, download the repo as .zip from th
 The relevant files are in the distrib folder. Read "INSTALLATION.txt" for instructions on where to put everything.
 
 To compile with visual studio: add the source files to your project and make sure the project is configured to produce a .dll
-you also need to link openvr_api.lib and include the OpenVR headers, available at https://github.com/ValveSoftware/openvr
-and the gmod lua headers https://github.com/Facepunch/gmod-module-base/tree/development
+you'll also need to:
+-link openvr_api.lib and get the OpenVR headers, both available at https://github.com/ValveSoftware/openvr
+-get the gmod lua headers https://github.com/Facepunch/gmod-module-base/tree/development
+-get the OpenGL extension headers GL/glext.h, GL/wglext.h, KHR/khrplatform.h https://www.khronos.org/registry/OpenGL/index_gl.php
