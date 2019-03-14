@@ -142,11 +142,11 @@ const char vertexShaderSource[] =
 "#version 330 core\n"
 "in vec3 vertexPosition;"
 "in vec2 vertexUV;"
-"uniform float offset;"
+"uniform float xoffset;"
 "out vec2 UV;"
 "void main()"
 "{"
-"	gl_Position = vec4(vertexPosition.x + offset, vertexPosition.y, vertexPosition.z, 1);"
+"	gl_Position = vec4(vertexPosition.x + xoffset, vertexPosition.y, vertexPosition.z, 1);"
 "	UV = vertexUV;"
 "}";
 
@@ -179,7 +179,7 @@ GLuint vertexArrayObjects[2];
 GLuint textureFull;
 GLuint textureLeft;
 GLuint textureRight;
-GLuint offsetUniformLoc;
+GLuint xOffsetUniformLoc;
 
 //capture related
 HDC gameWindowHDC;
@@ -189,9 +189,13 @@ void* bitmapData;
 //other
 HDC GLWindowDC = NULL;
 int mirrorInitialized = 0;
-float displayOffset = 0;
-int width = 0;
-int height = 0;
+int gameWindowWidth = 0;
+int gameWindowHeight = 0;
+float horizontalFOV = 0;
+float horizontalOffset = 0;
+float calculatedHorizontalOffset = 0;
+uint32_t recommendedWidth = 0;
+uint32_t recommendedHeight = 0;
 
 //*************************************************************************
 //                             mirrorInit
@@ -200,7 +204,7 @@ int height = 0;
 void mirrorInit() {
 	if (mirrorInitialized)
 		return;
-	
+
 	//create window for gl context
 	HINSTANCE hInstance = GetModuleHandle(0);
 	WNDCLASS wc = {};
@@ -252,7 +256,7 @@ void mirrorInit() {
 	}
 	glUseProgram(shaderProgram);
 
-	offsetUniformLoc = glGetUniformLocation(shaderProgram, "offset");
+	xOffsetUniformLoc = glGetUniformLocation(shaderProgram, "xoffset");
 
 	//create vaos+vbos for left/right eye quads
 	float vertexData[] =
@@ -309,16 +313,16 @@ void mirrorInit() {
 	//find gmod window, set up stuff for capturing with BitBlt
 	HWND hwnd = FindWindow(NULL, "Garry's Mod");
 	if (hwnd == NULL) {
-		Msg("Failed to find game window\n"); 
+		Msg("Failed to find game window\n");
 		return;
 	}
 	RECT rect;
 	if (GetClientRect(hwnd, &rect) == 0) {
-		Msg("Error: GetClientRect\n"); 
+		Msg("Error: GetClientRect\n");
 		return;
 	}
-	width = rect.right;
-	height = rect.bottom;
+	gameWindowWidth = rect.right;
+	gameWindowHeight = rect.bottom;
 	gameWindowHDC = GetDC(hwnd);
 	if (gameWindowHDC == NULL) {
 		Msg("Error: game window GetDC\n");
@@ -329,17 +333,17 @@ void mirrorInit() {
 	bmi.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.biPlanes = 1;
 	bmi.biBitCount = 32;
-	bmi.biWidth = width;
-	bmi.biHeight = height;
+	bmi.biWidth = gameWindowWidth;
+	bmi.biHeight = gameWindowHeight;
 	bmi.biCompression = BI_RGB;
 	bmi.biSizeImage = 0;
 	HBITMAP bmp = CreateDIBSection(gameWindowHDC, (BITMAPINFO*)&bmi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
 	SelectObject(bitmapHDC, bmp);
 
 	//create textures
-	textureFull = createTexture(width, height, NULL);
-	textureLeft = createTexture(width / 2, height, NULL);
-	textureRight = createTexture(width / 2, height, NULL);
+	textureFull = createTexture(gameWindowWidth, gameWindowHeight, NULL);
+	textureLeft = createTexture(gameWindowWidth / 2, gameWindowHeight, NULL);
+	textureRight = createTexture(gameWindowWidth / 2, gameWindowHeight, NULL);
 
 	//create a second framebuffer for RT
 	GLuint frameBufferObjects[1];
@@ -347,7 +351,8 @@ void mirrorInit() {
 	//make it active
 	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferObjects[0]);
 	glDrawBuffer(GL_COLOR_ATTACHMENT0);
-	glViewport(0, 0, width/2, height); //set viewport to half width because were using this to render to left/right eye textures only
+	//set viewport to half width because were using this to render to left/right eye textures only
+	glViewport(0, 0, gameWindowWidth / 2, gameWindowHeight);
 
 	mirrorInitialized = 1;
 	return;
@@ -360,21 +365,21 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 	if (!mirrorInitialized)
 		return 0;
 	//capture game window to bitmap
-	BitBlt(bitmapHDC, 0, 0, width, height, gameWindowHDC, 0, 0, SRCCOPY);
+	BitBlt(bitmapHDC, 0, 0, gameWindowWidth, gameWindowHeight, gameWindowHDC, 0, 0, SRCCOPY);
 
 	//copy bitmap data to gl texture
 	glBindTexture(GL_TEXTURE_2D, textureFull);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, (unsigned char*)bitmapData);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gameWindowWidth, gameWindowHeight, GL_BGRA, GL_UNSIGNED_BYTE, (unsigned char*)bitmapData);
 
 	//update left eye texture
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureLeft, 0);
-	glUniform1f(offsetUniformLoc, displayOffset);
+	glUniform1f(xOffsetUniformLoc, horizontalOffset);
 	glBindVertexArray(vertexArrayObjects[0]);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	//update right eye texture
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureRight, 0);
-	glUniform1f(offsetUniformLoc, -displayOffset);
+	glUniform1f(xOffsetUniformLoc, -horizontalOffset);
 	glBindVertexArray(vertexArrayObjects[1]);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -384,7 +389,7 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 	vr::Texture_t rightEyeTexture = { (void*)(uintptr_t)textureRight, vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
 	vr::VRCompositor()->Submit(vr::Eye_Right, &rightEyeTexture);
 
-	
+
 	//following is from the openvr opengl example, seems to reduce jitter
 	glFinish();
 
@@ -395,7 +400,7 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 	glFlush();
 	glFinish();
 	//
-	
+
 	return 0;
 }
 
@@ -435,12 +440,29 @@ LUA_FUNCTION(VRMOD_Init) {
 			return 1;
 		}
 		Msg("OK\n");
+
+		pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
+
+		//get FOV and display offset values
+		vr::HmdMatrix44_t proj = pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
+		float xscale = proj.m[0][0];
+		float xoffset = proj.m[0][2];
+		float yscale = proj.m[1][1];
+		float yoffset = proj.m[1][2];
+		float fov_px = 2.0f * (atanf(fabsf((1.0f - xoffset) / xscale)) * 180 / 3.141592654);
+		float fov_nx = 2.0f * (atanf(fabsf((-1.0f - xoffset) / xscale)) * 180 / 3.141592654);
+		float fov_py = 2.0f * (atanf(fabsf((1.0f - yoffset) / yscale)) * 180 / 3.141592654);
+		float fov_ny = 2.0f * (atanf(fabsf((-1.0f - yoffset) / yscale)) * 180 / 3.141592654);
+		horizontalFOV = max(fov_px, fov_nx);
+		calculatedHorizontalOffset = -xoffset;
+		horizontalOffset = -xoffset;
+
 	}
-	
+
 	char dir[256];
 	GetCurrentDirectory(256, dir);
 	char path[256];
-	sprintf_s(path, 256, "%s\\garrysmod\\lua\\bin\\vrmod_action_manifest.json",dir);
+	sprintf_s(path, 256, "%s\\garrysmod\\lua\\bin\\vrmod_action_manifest.json", dir);
 
 	vr::VRInput()->SetActionManifestPath(path);
 	vr::VRInput()->GetActionSetHandle("/actions/vrmod", &actionSet);
@@ -564,9 +586,22 @@ LUA_FUNCTION(VRMOD_GetActionStates) {
 //                        LUA VRMOD_SetDisplayOffset
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetDisplayOffset) {
-	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER))
-		displayOffset = LUA->GetNumber(1);
+	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER)) {
+		horizontalOffset = LUA->GetNumber(1);
+	}
+	else {
+		horizontalOffset = calculatedHorizontalOffset;
+	}
 	return 0;
+}
+
+//*************************************************************************
+//                        LUA VRMOD_GetFOV
+//*************************************************************************
+LUA_FUNCTION(VRMOD_GetFOV) {
+	LUA->PushNumber(horizontalFOV);
+	LUA->PushNumber((float)recommendedWidth / (float)recommendedHeight); //aspect ratio
+	return 2;
 }
 
 //*************************************************************************
@@ -584,6 +619,14 @@ LUA_FUNCTION(VRMOD_GetIPD) {
 //*************************************************************************
 LUA_FUNCTION(VRMOD_HMDPresent) {
 	LUA->PushBool(vr::VR_IsHmdPresent());
+	return 1;
+}
+
+//*************************************************************************
+//                        LUA VRMOD_GetVersion
+//*************************************************************************
+LUA_FUNCTION(VRMOD_GetVersion) {
+	LUA->PushNumber(1);
 	return 1;
 }
 
@@ -637,6 +680,11 @@ GMOD_MODULE_OPEN()
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_GetFOV");
+	LUA->PushCFunction(VRMOD_GetFOV);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_GetIPD");
 	LUA->PushCFunction(VRMOD_GetIPD);
 	LUA->SetTable(-3);
@@ -644,6 +692,11 @@ GMOD_MODULE_OPEN()
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_HMDPresent");
 	LUA->PushCFunction(VRMOD_HMDPresent);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_GetVersion");
+	LUA->PushCFunction(VRMOD_GetVersion);
 	LUA->SetTable(-3);
 
 	return 0;
