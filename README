@@ -1,11 +1,13 @@
 This is the module used by the VRMod addon for Garry's Mod (https://steamcommunity.com/sharedfiles/filedetails/?id=1678408548).
 It adds some basic lua functions for interfacing with OpenVR, and a very crude way to mirror the game window to the VR compositor.
 
-######################################################
+---
+
 IF YOU JUST WANT TO INSTALL THE MODULE:
-open the distrib folder. Everything you need is in there.
+Open the distrib folder. Everything you need is in there.
 Read the "INSTALLATION.txt" file (also in the distrib folder) for instructions on where to put everything.
-#####################################################
+
+---
 
 
 If you want to compile the module yourself using visual studio:
