@@ -166,13 +166,26 @@ const char fragmentShaderSource[] =
 
 //openvr related
 vr::IVRSystem * pSystem = NULL;
+vr::IVRInput * pInput = NULL;
 vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
 
-vr::VRActionSetHandle_t actionSet = vr::k_ulInvalidActionSetHandle;
-vr::VRActionHandle_t action1 = vr::k_ulInvalidActionHandle;
-vr::VRActionHandle_t action2 = vr::k_ulInvalidActionHandle;
-vr::VRActionHandle_t action3 = vr::k_ulInvalidActionHandle;
-vr::VRActionHandle_t action4 = vr::k_ulInvalidActionHandle;
+vr::VRActionSetHandle_t actionSet			= vr::k_ulInvalidActionSetHandle;
+vr::VRActiveActionSet_t activeActionSet		= { 0 };
+vr::VRActionHandle_t boolean_primaryfire	= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_secondaryfire	= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_changeweapon	= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_use			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_spawnmenu		= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t pose_lefthand			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t pose_righthand			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t vector2_walkdirection	= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_walk			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_flashlight		= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_turnleft		= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_turnright		= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_mic			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_reload			= vr::k_ulInvalidActionHandle;
+vr::VRActionHandle_t boolean_undo			= vr::k_ulInvalidActionHandle;
 
 //gl related
 GLuint vertexArrayObjects[2];
@@ -408,68 +421,75 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 //                             LUA VRMOD_Init
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Init) {
-	if (!LUA->IsType(1, GarrysMod::Lua::Type::NUMBER) || pSystem != NULL) {
+
+	vr::HmdError error = vr::VRInitError_None;
+
+	Msg("VR_Init... ");
+	pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
+	if (error != vr::VRInitError_None) {
 		LUA->PushNumber(-1);
 		return 1;
 	}
-	vr::HmdError error = vr::VRInitError_None;
-	if (LUA->GetNumber(1) < 1) {
-		pSystem = vr::VR_Init(&error, vr::VRApplication_Background);
+	Msg("OK\n");
+
+	Msg("VRCompositor... ");
+	if (!vr::VRCompositor()) {
+		Msg("error\n");
+		LUA->PushNumber(-1);
+		return 1;
 	}
-	else {
-		Msg("VR_Init... ");
-		pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
-		if (error != vr::VRInitError_None) {
-			LUA->PushNumber(-1);
-			return 1;
-		}
-		Msg("OK\n");
+	Msg("OK\n");
 
-		Msg("VRCompositor... ");
-		if (!vr::VRCompositor()) {
-			Msg("error\n");
-			LUA->PushNumber(-1);
-			return 1;
-		}
-		Msg("OK\n");
-
-		Msg("MirrorInit... ");
-		mirrorInit();
-		if (!mirrorInitialized) {
-			LUA->PushNumber(-1);
-			return 1;
-		}
-		Msg("OK\n");
-
-		pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
-
-		//get FOV and display offset values
-		vr::HmdMatrix44_t proj = pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
-		float xscale = proj.m[0][0];
-		float xoffset = proj.m[0][2];
-		float yscale = proj.m[1][1];
-		float yoffset = proj.m[1][2];
-		float fov_px = 2.0f * (atanf(fabsf((1.0f - xoffset) / xscale)) * 180 / 3.141592654);
-		float fov_nx = 2.0f * (atanf(fabsf((-1.0f - xoffset) / xscale)) * 180 / 3.141592654);
-		float fov_py = 2.0f * (atanf(fabsf((1.0f - yoffset) / yscale)) * 180 / 3.141592654);
-		float fov_ny = 2.0f * (atanf(fabsf((-1.0f - yoffset) / yscale)) * 180 / 3.141592654);
-		horizontalFOV = max(fov_px, fov_nx);
-		calculatedHorizontalOffset = -xoffset;
-		horizontalOffset = -xoffset;
-
+	Msg("MirrorInit... ");
+	mirrorInit();
+	if (!mirrorInitialized) {
+		LUA->PushNumber(-1);
+		return 1;
 	}
+	Msg("OK\n");
 
+	pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
+
+	//get FOV and display offset values
+	vr::HmdMatrix44_t proj = pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
+	float xscale = proj.m[0][0];
+	float xoffset = proj.m[0][2];
+	float yscale = proj.m[1][1];
+	float yoffset = proj.m[1][2];
+	float fov_px = 2.0f * (atanf(fabsf((1.0f - xoffset) / xscale)) * 180 / 3.141592654);
+	float fov_nx = 2.0f * (atanf(fabsf((-1.0f - xoffset) / xscale)) * 180 / 3.141592654);
+	float fov_py = 2.0f * (atanf(fabsf((1.0f - yoffset) / yscale)) * 180 / 3.141592654);
+	float fov_ny = 2.0f * (atanf(fabsf((-1.0f - yoffset) / yscale)) * 180 / 3.141592654);
+	horizontalFOV = max(fov_px, fov_nx);
+	calculatedHorizontalOffset = -xoffset;
+	horizontalOffset = -xoffset;
+
+	//prepare action related stuff
 	char dir[256];
 	GetCurrentDirectory(256, dir);
 	char path[256];
 	sprintf_s(path, 256, "%s\\garrysmod\\lua\\bin\\vrmod_action_manifest.json", dir);
 
-	vr::VRInput()->SetActionManifestPath(path);
-	vr::VRInput()->GetActionSetHandle("/actions/vrmod", &actionSet);
-	vr::VRInput()->GetActionHandle("/actions/vrmod/in/action1", &action1);
-	vr::VRInput()->GetActionHandle("/actions/vrmod/in/action2", &action2);
-	vr::VRInput()->GetActionHandle("/actions/vrmod/in/action3", &action3);
-	vr::VRInput()->GetActionHandle("/actions/vrmod/in/action4", &action4);
+	pInput = vr::VRInput();
+	if (pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
+		Msg("Error: vrmod_action_manifest.json not found!");
+	}
+	pInput->GetActionSetHandle("/actions/vrmod", &actionSet);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_primaryfire", &boolean_primaryfire);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_secondaryfire", &boolean_secondaryfire);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_changeweapon", &boolean_changeweapon);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_spawnmenu", &boolean_spawnmenu);
+	pInput->GetActionHandle("/actions/vrmod/in/pose_lefthand", &pose_lefthand);
+	pInput->GetActionHandle("/actions/vrmod/in/pose_righthand", &pose_righthand);
+	pInput->GetActionHandle("/actions/vrmod/in/vector2_walkdirection", &vector2_walkdirection);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_walk", &boolean_walk);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_flashlight", &boolean_flashlight);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_turnleft", &boolean_turnleft);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_turnright", &boolean_turnright);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_use", &boolean_use);
+	pInput->GetActionHandle("/actions/vrmod/in/boolean_mic", &boolean_mic);
+
+	activeActionSet.ulActionSet = actionSet;
 
 	LUA->PushNumber(0);
 	return 1;
@@ -488,98 +508,131 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 //                            LUA VRMOD_UpdatePoses
 //*************************************************************************
 LUA_FUNCTION(VRMOD_UpdatePoses) {
-	if (mirrorInitialized) {
-		vr::VRCompositor()->WaitGetPoses(poses, vr::k_unMaxTrackedDeviceCount, NULL, 0);
-	}
-	else {
-		pSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, poses, vr::k_unMaxTrackedDeviceCount);
-	}
+	vr::VRCompositor()->WaitGetPoses(poses, vr::k_unMaxTrackedDeviceCount, NULL, 0);
+	pInput->UpdateActionState(&activeActionSet, sizeof(activeActionSet), 1);
 	return 0;
 }
 
 //*************************************************************************
-//                             LUA VRMOD_GetHMDPose
+//                             LUA VRMOD_GetPoses
 //*************************************************************************
-//TODO merge this and GetControllerPoses?
-LUA_FUNCTION(VRMOD_GetHMDPose) {
-	Vector pos; pos.x = 0; pos.y = 0; pos.z = 0;
-	QAngle ang; ang.x = 0; ang.y = 0; ang.z = 0;
-	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
-		if (poses[i].bPoseIsValid) {
-			vr::HmdMatrix34_t mat = poses[i].mDeviceToAbsoluteTracking;
-			if (pSystem->GetTrackedDeviceClass(i) == vr::TrackedDeviceClass_HMD) {
-				pos.x = -mat.m[2][3];
-				pos.y = -mat.m[0][3];
-				pos.z = mat.m[1][3];
-				ang.x = asin(mat.m[1][2]) * (180.0 / 3.141592654);
-				ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0 / 3.141592654);
-				ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0 / 3.141592654);
-				break;
-			}
+LUA_FUNCTION(VRMOD_GetPoses) {
+	vr::InputPoseActionData_t poseActionData;
+	vr::TrackedDevicePose_t pose;
+	char poseName[32];
+
+	LUA->CreateTable();
+	
+	for (int i = 0; i < 3; i++) {
+		//select a pose
+		poseActionData.pose.bPoseIsValid = 0;
+		pose.bPoseIsValid = 0;
+		if (i == 0) {
+			pose = poses[0];
+			memcpy(poseName, "hmd", 4);
 		}
+		else if (i == 1) {
+			pInput->GetPoseActionData(pose_lefthand, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
+			pose = poseActionData.pose;
+			memcpy(poseName, "lefthand", 9);
+		}
+		else if (i == 2) {
+			pInput->GetPoseActionData(pose_righthand, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
+			pose = poseActionData.pose;
+			memcpy(poseName, "righthand", 10);
+		}
+		//
+		if (pose.bPoseIsValid) {
+			//do some conversion
+			vr::HmdMatrix34_t mat = pose.mDeviceToAbsoluteTracking;
+			Vector pos;
+			Vector vel;
+			QAngle ang;
+			QAngle angvel;
+			pos.x = -mat.m[2][3];
+			pos.y = -mat.m[0][3];
+			pos.z = mat.m[1][3];
+			ang.x = asin(mat.m[1][2]) * (180.0 / 3.141592654);
+			ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0 / 3.141592654);
+			ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0 / 3.141592654);
+			//todo check the correct axis for these
+			vel.x = pose.vVelocity.v[0];
+			vel.y = pose.vVelocity.v[1];
+			vel.z = pose.vVelocity.v[2];
+			angvel.x = pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
+			angvel.y = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
+			angvel.z = pose.vAngularVelocity.v[2] * (180.0 / 3.141592654);
+			
+			//push a table for the pose
+			LUA->CreateTable();
+
+			LUA->PushVector(pos);
+			LUA->SetField(-2, "pos");
+
+			LUA->PushVector(vel);
+			LUA->SetField(-2, "vel");
+
+			LUA->PushAngle(ang);
+			LUA->SetField(-2, "ang");
+
+			LUA->PushAngle(angvel);
+			LUA->SetField(-2, "angvel");
+
+			LUA->SetField(-2, poseName);
+
+		}
+
 	}
-	LUA->PushVector(pos);
-	LUA->PushAngle(ang);
-	return 2;
+
+	return 1;
 }
 
-//*************************************************************************
-//                          LUA VRMOD_GetControllerPoses
-//*************************************************************************
-LUA_FUNCTION(VRMOD_GetControllerPoses) {
-	Vector pos;
-	QAngle ang;
-	int count = 0;
-	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
-		if (poses[i].bPoseIsValid) {
-			vr::HmdMatrix34_t mat = poses[i].mDeviceToAbsoluteTracking;
-			if (pSystem->GetTrackedDeviceClass(i) == vr::TrackedDeviceClass_Controller) {
-				pos.x = -mat.m[2][3];
-				pos.y = -mat.m[0][3];
-				pos.z = mat.m[1][3];
-				//using the same matrix to angle as wiremod
-				ang.x = asin(mat.m[1][2]) * (180.0 / 3.141592654);
-				ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0 / 3.141592654);
-				ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0 / 3.141592654);
-				LUA->PushVector(pos);
-				LUA->PushAngle(ang);
-				count += 2;
-			}
-		}
-	}
-	return count;
-}
 
 //*************************************************************************
-//                          LUA VRMOD_GetActionStates
+//                          LUA VRMOD_GetActions
 //*************************************************************************
-LUA_FUNCTION(VRMOD_GetActionStates) {
-	int action1_state = 0;
-	int action2_state = 0;
-	int action3_state = 0;
-	int action4_state = 0;
-	vr::VRActiveActionSet_t activeActionSet = { 0 };
-	activeActionSet.ulActionSet = actionSet;
-	vr::VRInput()->UpdateActionState(&activeActionSet, sizeof(activeActionSet), 1);
+LUA_FUNCTION(VRMOD_GetActions) {
+	vr::InputDigitalActionData_t digitalActionData;
+	vr::InputAnalogActionData_t analogActionData;
 
-	vr::InputDigitalActionData_t actionData;
-	if (vr::VRInput()->GetDigitalActionData(action1, &actionData, sizeof(actionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && actionData.bState) {
-		action1_state = 1;
-	}
-	if (vr::VRInput()->GetDigitalActionData(action2, &actionData, sizeof(actionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && actionData.bState) {
-		action2_state = 1;
-	}
-	if (vr::VRInput()->GetDigitalActionData(action3, &actionData, sizeof(actionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && actionData.bState) {
-		action3_state = 1;
-	}
-	if (vr::VRInput()->GetDigitalActionData(action4, &actionData, sizeof(actionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && actionData.bState) {
-		action4_state = 1;
-	}
-	LUA->PushNumber(action1_state);
-	LUA->PushNumber(action2_state);
-	LUA->PushNumber(action3_state);
-	LUA->PushNumber(action4_state);
-	return 4;
+	LUA->CreateTable();
+
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_primaryfire, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "primaryfire");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_secondaryfire, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "secondaryfire");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_changeweapon, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "changeweapon");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_use, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "use");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_spawnmenu, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "spawnmenu");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_walk, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "walk");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_flashlight, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "flashlight");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_turnleft, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "turnleft");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_turnright, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "turnright");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_mic, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "mic");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_reload, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "reload");
+	LUA->PushBool((pInput->GetDigitalActionData(boolean_undo, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
+	LUA->SetField(-2, "undo");
+
+	LUA->CreateTable();
+
+	pInput->GetAnalogActionData(vector2_walkdirection, &analogActionData, sizeof(analogActionData), vr::k_ulInvalidInputValueHandle);
+	LUA->PushNumber(analogActionData.x);
+	LUA->SetField(-2, "x");
+	LUA->PushNumber(analogActionData.y);
+	LUA->SetField(-2, "y");
+
+	LUA->SetField(-2, "walkdirection");
+
+	return 1;
 }
 
 //*************************************************************************
@@ -626,10 +679,9 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(1);
+	LUA->PushNumber(2);
 	return 1;
 }
-
 
 //*************************************************************************
 //
@@ -655,18 +707,13 @@ GMOD_MODULE_OPEN()
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetHMDPose");
-	LUA->PushCFunction(VRMOD_GetHMDPose);
+	LUA->PushString("VRMOD_GetPoses");
+	LUA->PushCFunction(VRMOD_GetPoses);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetControllerPoses");
-	LUA->PushCFunction(VRMOD_GetControllerPoses);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetActionStates");
-	LUA->PushCFunction(VRMOD_GetActionStates);
+	LUA->PushString("VRMOD_GetActions");
+	LUA->PushCFunction(VRMOD_GetActions);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
