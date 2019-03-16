@@ -7,29 +7,64 @@
   ], 
   "actions": [
     {
-      "name": "/actions/vrmod/in/action1",
+      "name": "/actions/vrmod/in/boolean_primaryfire",
       "type": "boolean"
     },
     {
-      "name": "/actions/vrmod/in/action2",
+      "name": "/actions/vrmod/in/boolean_secondaryfire",
       "type": "boolean"
     },
     {
-      "name": "/actions/vrmod/in/action3",
+      "name": "/actions/vrmod/in/boolean_changeweapon",
       "type": "boolean"
     },
     {
-      "name": "/actions/vrmod/in/action4",
+      "name": "/actions/vrmod/in/boolean_use",
       "type": "boolean"
-    }
-  ],
-  "localization" : [
-   {
-       "language_tag": "en",
-        "/actions/vrmod/in/action1" : "action1 fancyname",
-        "/actions/vrmod/in/action2" : "action2 fancyname",
-	"/actions/vrmod/in/action3" : "action3 fancyname",
-	"/actions/vrmod/in/action4" : "action4 fancyname"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_spawnmenu",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/pose_lefthand",
+      "type": "pose"
+    },
+    {
+      "name": "/actions/vrmod/in/pose_righthand",
+      "type": "pose"
+    },
+    {
+      "name": "/actions/vrmod/in/vector2_walkdirection",
+      "type": "vector2"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_walk",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_flashlight",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_turnleft",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_turnright",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_mic",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_reload",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_undo",
+      "type": "boolean"
     }
   ]
 }
