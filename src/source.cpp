@@ -1,167 +1,17 @@
 #include "GarrysMod/Lua/Interface.h"
 #include <stdio.h>
 #include <Windows.h>
-#include <gl/GL.h>
-#include "GL/glext.h"
-#include "GL/wglext.h"
+#include <d3d9.h>
+#include <d3d11.h>
 #include <openvr.h>
+#include <MinHook.h>
 
-#pragma comment(lib, "opengl32.lib")
 
-//functions to be loaded from dlls
-typedef void(*msg)(char const* pMsg, ...);
-msg Msg = nullptr;
-
-//*************************************************************************
-//                             gl extensions
-//*************************************************************************
-PFNGLCREATESHADERPROC glCreateShader;
-PFNGLSHADERSOURCEPROC glShaderSource;
-PFNGLCOMPILESHADERPROC glCompileShader;
-PFNGLGETSHADERIVPROC glGetShaderiv;
-PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
-PFNGLCREATEPROGRAMPROC glCreateProgram;
-PFNGLATTACHSHADERPROC glAttachShader;
-PFNGLLINKPROGRAMPROC glLinkProgram;
-PFNGLGETPROGRAMIVPROC glGetProgramiv;
-PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
-PFNGLDETACHSHADERPROC glDetachShader;
-PFNGLDELETESHADERPROC glDeleteShader;
-PFNGLUSEPROGRAMPROC glUseProgram;
-PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
-PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
-PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
-PFNGLGENBUFFERSPROC glGenBuffers;
-PFNGLBINDBUFFERPROC glBindBuffer;
-PFNGLBUFFERDATAPROC glBufferData;
-PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
-PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
-PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
-PFNGLFRAMEBUFFERTEXTUREPROC glFramebufferTexture;
-PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
-PFNGLUNIFORM1FPROC glUniform1f;
-PFNGLUNIFORM1IPROC glUniform1i;
-
-void loadExtensions() {
-	glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
-	glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
-	glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
-	glGenBuffers = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
-	glBindBuffer = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
-	glBufferData = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
-	glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
-	glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
-	glShaderSource = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
-	glCompileShader = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
-	glGetShaderiv = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
-	glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
-	glAttachShader = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
-	glLinkProgram = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
-	glGetProgramiv = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
-	glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
-	glDeleteShader = (PFNGLDELETESHADERPROC)wglGetProcAddress("glDeleteShader");
-	glCreateProgram = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
-	glUseProgram = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
-	glDetachShader = (PFNGLDETACHSHADERPROC)wglGetProcAddress("glDetachShader");
-	glGenFramebuffers = (PFNGLGENFRAMEBUFFERSPROC)wglGetProcAddress("glGenFramebuffers");
-	glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)wglGetProcAddress("glBindFramebuffer");
-	glFramebufferTexture = (PFNGLFRAMEBUFFERTEXTUREPROC)wglGetProcAddress("glFramebufferTexture");
-	glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
-	glUniform1f = (PFNGLUNIFORM1FPROC)wglGetProcAddress("glUniform1f");
-	glUniform1i = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
-}
+#pragma comment (lib, "d3d11.lib")
+#pragma comment (lib, "d3d9.lib")
 
 //*************************************************************************
-//                             gl helper functions
-//*************************************************************************
-int compileShader(GLuint shader, const GLchar* source) {
-	GLint success = 0;
-	glShaderSource(shader, 1, &source, NULL);
-	glCompileShader(shader);
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-	if (success == GL_FALSE) {
-		GLint logSize = 0;
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logSize);
-		GLchar* log = (GLchar*)malloc(logSize);
-		glGetShaderInfoLog(shader, logSize, NULL, log);
-		Msg(log);
-		free(log);
-		return -1;
-	}
-	return 0;
-}
-
-int createShaderProgram(GLuint* shaderProgram, int shaderCount, ...) {
-	GLuint* shaders = (GLuint*)malloc(shaderCount * sizeof(GLuint));
-	va_list ap;
-	va_start(ap, shaderCount);
-	for (int i = 0; i < shaderCount; i++) {
-		shaders[i] = glCreateShader(va_arg(ap, GLenum));
-		if (compileShader(shaders[i], va_arg(ap, const GLchar*)) != 0)
-			return -1;
-	}
-	va_end(ap);
-	*shaderProgram = glCreateProgram();
-	for (int i = 0; i < shaderCount; i++)
-		glAttachShader(*shaderProgram, shaders[i]);
-	glLinkProgram(*shaderProgram);
-	GLint isLinked = 0;
-	glGetProgramiv(*shaderProgram, GL_LINK_STATUS, &isLinked);
-	if (isLinked == GL_FALSE) {
-		GLint maxLength = 0;
-		glGetProgramiv(*shaderProgram, GL_INFO_LOG_LENGTH, &maxLength);
-		GLchar* log = (GLchar*)malloc(maxLength);
-		glGetProgramInfoLog(*shaderProgram, maxLength, NULL, log);
-		Msg(log);
-		free(log);
-		return -1;
-	}
-	for (int i = 0; i < shaderCount; i++) {
-		glDetachShader(*shaderProgram, shaders[i]);
-		glDeleteShader(shaders[i]);
-	}
-	free(shaders);
-	return 0;
-}
-
-GLuint createTexture(GLsizei width, GLsizei height, const GLvoid* data) {
-	GLuint textureObjects[1];
-	glGenTextures(1, textureObjects);
-	glBindTexture(GL_TEXTURE_2D, textureObjects[0]);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	return textureObjects[0];
-}
-
-//*************************************************************************
-//                             shader sources
-//*************************************************************************
-
-const char vertexShaderSource[] =
-"#version 330 core\n"
-"in vec3 vertexPosition;"
-"in vec2 vertexUV;"
-"uniform float xoffset;"
-"out vec2 UV;"
-"void main()"
-"{"
-"	gl_Position = vec4(vertexPosition.x + xoffset, vertexPosition.y, vertexPosition.z, 1);"
-"	UV = vertexUV;"
-"}";
-
-const char fragmentShaderSource[] =
-"#version 330 core\n"
-"in vec2 UV;"
-"uniform sampler2D textureSampler;"
-"out vec4 color;"
-"void main()"
-"{"
-"	color = texture(textureSampler, UV).rgba;"
-"}";
-
-//*************************************************************************
-//                             other globals
+//                             globals
 //*************************************************************************
 
 //openvr related
@@ -187,23 +37,14 @@ vr::VRActionHandle_t boolean_mic			= vr::k_ulInvalidActionHandle;
 vr::VRActionHandle_t boolean_reload			= vr::k_ulInvalidActionHandle;
 vr::VRActionHandle_t boolean_undo			= vr::k_ulInvalidActionHandle;
 
-//gl related
-GLuint vertexArrayObjects[2];
-GLuint textureFull;
-GLuint textureLeft;
-GLuint textureRight;
-GLuint xOffsetUniformLoc;
-
-//capture related
-HDC gameWindowHDC;
-HDC bitmapHDC;
-void* bitmapData;
+//directx
+ID3D11DeviceContext* d3d11Context;
+ID3D11Device* d3d11Device;
+ID3D11Texture2D* d3d11Texture = NULL;
+IDirect3DDevice9* d3d9Device;
+HANDLE sharedTexture = NULL;
 
 //other
-HDC GLWindowDC = NULL;
-int mirrorInitialized = 0;
-int gameWindowWidth = 0;
-int gameWindowHeight = 0;
 float horizontalFOV = 0;
 float horizontalOffset = 0;
 float calculatedHorizontalOffset = 0;
@@ -211,163 +52,78 @@ uint32_t recommendedWidth = 0;
 uint32_t recommendedHeight = 0;
 
 //*************************************************************************
-//                             mirrorInit
+//                         CreateTexture Hook
 //*************************************************************************
 
-void mirrorInit() {
-	if (mirrorInitialized)
-		return;
+typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
+CreateTexture CreateTexture_orig = 0;
 
-	//create window for gl context
-	HINSTANCE hInstance = GetModuleHandle(0);
-	WNDCLASS wc = {};
-	wc.style = CS_OWNDC;
-	wc.lpfnWndProc = DefWindowProc;
-	wc.hInstance = hInstance;
-	wc.lpszClassName = "vr_mirror";
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	RegisterClass(&wc);
-	HWND windowHandle = CreateWindow("vr_mirror", "vr_mirror", WS_BORDER | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 512, 512, NULL, NULL, hInstance, NULL);
-	if (windowHandle == NULL) {
-		Msg("Error: CreateWindow\n");
+HRESULT APIENTRY CreateTexture_hook(IDirect3DDevice9* pDevice, UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9** tex, HANDLE* shared_handle) {
+	if (sharedTexture == NULL) {
+		shared_handle = &sharedTexture;
+		pool = D3DPOOL_DEFAULT;
+	}
+	return CreateTexture_orig(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
+};
+
+//*************************************************************************
+//                             HookDirectX
+//*************************************************************************
+
+void HookDirectX() {
+		
+	//create temporary dx9 interface
+	IDirect3D9* dx = Direct3DCreate9(D3D_SDK_VERSION);
+	if (dx == NULL) {
+		MessageBoxA(NULL, "Direct3DCreate9", NULL, MB_OK);
 		return;
 	}
-	PIXELFORMATDESCRIPTOR pfd =
-	{
-		sizeof(PIXELFORMATDESCRIPTOR),
-		1,
-		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-		PFD_TYPE_RGBA,
-		32,
-		0, 0, 0, 0, 0, 0,
-		0,
-		0,
-		0,
-		0, 0, 0, 0,
-		24,
-		8,
-		0,
-		PFD_MAIN_PLANE,
-		0,
-		0, 0, 0
-	};
-	GLWindowDC = GetDC(windowHandle);
-	SetPixelFormat(GLWindowDC, ChoosePixelFormat(GLWindowDC, &pfd), &pfd);
 
-	//create gl context
-	HGLRC GLContext = wglCreateContext(GLWindowDC);
-	wglMakeCurrent(GLWindowDC, GLContext);
-
-	//load gl extensions
-	loadExtensions();
-
-	//create and compile shaders
-	GLuint shaderProgram;
-	if (createShaderProgram(&shaderProgram, 2, GL_VERTEX_SHADER, vertexShaderSource, GL_FRAGMENT_SHADER, fragmentShaderSource) != 0) {
-		Msg("Error: createShaderProgram\n");
+	//create temporary window for dx9 device
+	HWND window = CreateWindowA("BUTTON", "Hooking...", WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, NULL, NULL, GetModuleHandle(NULL), NULL);
+	if (window == NULL) {
+		MessageBoxA(NULL, "CreateWindow", NULL, MB_OK);
 		return;
 	}
-	glUseProgram(shaderProgram);
 
-	xOffsetUniformLoc = glGetUniformLocation(shaderProgram, "xoffset");
+	//create dx9 device (for getting CreateTexture address?)
+	D3DPRESENT_PARAMETERS params;
+	ZeroMemory(&params, sizeof(params));
+	params.Windowed = TRUE;
+	params.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	params.hDeviceWindow = window;
+	params.BackBufferFormat = D3DFMT_UNKNOWN;
 
-	//create vaos+vbos for left/right eye quads
-	float vertexData[] =
-	{
-		-1.0f, -1.0f, 0.0f,
-		1.0f, -1.0f, 0.0f,
-		1.0f, 1.0f, 0.0f,
-		1.0f, 1.0f, 0.0f,
-		-1.0f, 1.0f, 0.0f,
-		-1.0f, -1.0f, 0.0f
-	};
-	float uvDataLeft[] =
-	{
-		0.0f, 0.0f,
-		0.5f, 0.0f,
-		0.5f, 1.0f,
-		0.5f, 1.0f,
-		0.0f, 1.0f,
-		0.0f, 0.0f
-	};
-	float uvDataRight[] =
-	{
-		0.5f, 0.0f,
-		1.0f, 0.0f,
-		1.0f, 1.0f,
-		1.0f, 1.0f,
-		0.5f, 1.0f,
-		0.5f, 0.0f
-	};
-
-	glGenVertexArrays(2, vertexArrayObjects);
-	GLuint buffers[3];
-	glGenBuffers(3, buffers);
-	//set up left quad
-	glBindVertexArray(vertexArrayObjects[0]);
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), vertexData, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[1]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(uvDataLeft), uvDataLeft, GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-	//set up right quad
-	glBindVertexArray(vertexArrayObjects[1]);
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[2]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(uvDataRight), uvDataRight, GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-	//find gmod window, set up stuff for capturing with BitBlt
-	HWND hwnd = FindWindow(NULL, "Garry's Mod");
-	if (hwnd == NULL) {
-		Msg("Failed to find game window\n");
+	if (dx->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &d3d9Device) != D3D_OK) {
+		MessageBoxA(NULL, "CreateDevice", NULL, MB_OK);
 		return;
 	}
-	RECT rect;
-	if (GetClientRect(hwnd, &rect) == 0) {
-		Msg("Error: GetClientRect\n");
+
+	//add the hook
+	DWORD* dVtable = (DWORD*)d3d9Device;
+	dVtable = (DWORD*)dVtable[0];
+
+	CreateTexture_orig = (CreateTexture)dVtable[23];
+
+	if (MH_Initialize() != MH_OK) {
+		MessageBoxA(NULL, "MH_Initialize", NULL, MB_OK);
 		return;
 	}
-	gameWindowWidth = rect.right;
-	gameWindowHeight = rect.bottom;
-	gameWindowHDC = GetDC(hwnd);
-	if (gameWindowHDC == NULL) {
-		Msg("Error: game window GetDC\n");
+
+	if (MH_CreateHook((DWORD_PTR*)dVtable[23], &CreateTexture_hook, reinterpret_cast<void**>(&CreateTexture_orig)) != MH_OK) {
+		MessageBoxA(NULL, "MH_CreateHook", NULL, MB_OK);
 		return;
 	}
-	bitmapHDC = CreateCompatibleDC(gameWindowHDC);
-	BITMAPINFOHEADER bmi = { 0 };
-	bmi.biSize = sizeof(BITMAPINFOHEADER);
-	bmi.biPlanes = 1;
-	bmi.biBitCount = 32;
-	bmi.biWidth = gameWindowWidth;
-	bmi.biHeight = gameWindowHeight;
-	bmi.biCompression = BI_RGB;
-	bmi.biSizeImage = 0;
-	HBITMAP bmp = CreateDIBSection(gameWindowHDC, (BITMAPINFO*)&bmi, DIB_RGB_COLORS, &bitmapData, NULL, 0);
-	SelectObject(bitmapHDC, bmp);
 
-	//create textures
-	textureFull = createTexture(gameWindowWidth, gameWindowHeight, NULL);
-	textureLeft = createTexture(gameWindowWidth / 2, gameWindowHeight, NULL);
-	textureRight = createTexture(gameWindowWidth / 2, gameWindowHeight, NULL);
+	if (MH_EnableHook((DWORD_PTR*)dVtable[23]) != MH_OK) {
+		MessageBoxA(NULL, "MH_EnableHook", NULL, MB_OK);
+		return;
+	}
 
-	//create a second framebuffer for RT
-	GLuint frameBufferObjects[1];
-	glGenFramebuffers(1, frameBufferObjects);
-	//make it active
-	glBindFramebuffer(GL_FRAMEBUFFER, frameBufferObjects[0]);
-	glDrawBuffer(GL_COLOR_ATTACHMENT0);
-	//set viewport to half width because were using this to render to left/right eye textures only
-	glViewport(0, 0, gameWindowWidth / 2, gameWindowHeight);
+	//
+	dx->Release();
+	DestroyWindow(window);
 
-	mirrorInitialized = 1;
 	return;
 }
 
@@ -375,44 +131,57 @@ void mirrorInit() {
 //                           LUA VRMOD_MirrorFrame
 //*************************************************************************
 LUA_FUNCTION(VRMOD_MirrorFrame) {
-	if (!mirrorInitialized)
+	if (sharedTexture == NULL)
 		return 0;
-	//capture game window to bitmap
-	BitBlt(bitmapHDC, 0, 0, gameWindowWidth, gameWindowHeight, gameWindowHDC, 0, 0, SRCCOPY);
 
-	//copy bitmap data to gl texture
-	glBindTexture(GL_TEXTURE_2D, textureFull);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gameWindowWidth, gameWindowHeight, GL_BGRA, GL_UNSIGNED_BYTE, (unsigned char*)bitmapData);
+	if (d3d11Texture == NULL) {
+		//create dx11 device
+		if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &d3d11Device, NULL, &d3d11Context) != S_OK) {
+			MessageBoxA(NULL, "D3D11CreateDevice", NULL, MB_OK);
+			return 0;
+		}
+		//get dx11 texture from shared texture handle
+		ID3D11Resource* res;
+		if (FAILED(d3d11Device->OpenSharedResource(sharedTexture, __uuidof(ID3D11Resource), (void**)&res))) {
+			MessageBoxA(NULL, "OpenSharedResource", NULL, MB_OK);
+			return 0;
+		}
 
-	//update left eye texture
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureLeft, 0);
-	glUniform1f(xOffsetUniformLoc, horizontalOffset);
-	glBindVertexArray(vertexArrayObjects[0]);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+		if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&d3d11Texture))) {
+			MessageBoxA(NULL, "QueryInterface", NULL, MB_OK);
+			return 0;
+		}
+		//dont need the hook anymore
+		DWORD* dVtable = (DWORD*)d3d9Device;
+		dVtable = (DWORD*)dVtable[0];
+		MH_DisableHook((DWORD_PTR*)dVtable[23]);
+		MH_RemoveHook((DWORD_PTR*)dVtable[23]);
+		if (MH_Uninitialize() != MH_OK)
+		{
+			MessageBoxA(NULL, "MH_Uninitialize", NULL, MB_OK);
+			return 0;
+		}
+	}
 
-	//update right eye texture
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureRight, 0);
-	glUniform1f(xOffsetUniformLoc, -horizontalOffset);
-	glBindVertexArray(vertexArrayObjects[1]);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	vr::Texture_t vrTexture = { d3d11Texture, vr::TextureType_DirectX, vr::ColorSpace_Auto };
+	
+	vr::VRTextureBounds_t textureBounds;
 
-	//submit textures to vr compositor
-	vr::Texture_t leftEyeTexture = { (void*)(uintptr_t)textureLeft, vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
-	vr::VRCompositor()->Submit(vr::Eye_Left, &leftEyeTexture);
-	vr::Texture_t rightEyeTexture = { (void*)(uintptr_t)textureRight, vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
-	vr::VRCompositor()->Submit(vr::Eye_Right, &rightEyeTexture);
+	//submit Left eye
+	textureBounds.uMin = 0.0f - horizontalOffset * 0.25f;
+	textureBounds.uMax = 0.5f - horizontalOffset * 0.25f;
+	textureBounds.vMin = 0.0f;
+	textureBounds.vMax = 1.0f;
 
+	vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &vrTexture, &textureBounds);
 
-	//following is from the openvr opengl example, seems to reduce jitter
-	glFinish();
+	//submit Right eye
+	textureBounds.uMin = 0.5f + horizontalOffset * 0.25f;
+	textureBounds.uMax = 1.0f + horizontalOffset * 0.25f;
+	textureBounds.vMin = 0.0f;
+	textureBounds.vMax = 1.0f;
 
-	SwapBuffers(GLWindowDC);
-	glClearColor(0, 0, 0, 1);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glFlush();
-	glFinish();
-	//
+	vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &vrTexture, &textureBounds);
 
 	return 0;
 }
@@ -424,29 +193,20 @@ LUA_FUNCTION(VRMOD_Init) {
 
 	vr::HmdError error = vr::VRInitError_None;
 
-	Msg("VR_Init... ");
 	pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
 	if (error != vr::VRInitError_None) {
+		MessageBoxA(NULL, "VR_Init failed", NULL, MB_OK);
 		LUA->PushNumber(-1);
 		return 1;
 	}
-	Msg("OK\n");
 
-	Msg("VRCompositor... ");
 	if (!vr::VRCompositor()) {
-		Msg("error\n");
+		MessageBoxA(NULL, "VRCompositor failed", NULL, MB_OK);
 		LUA->PushNumber(-1);
 		return 1;
 	}
-	Msg("OK\n");
 
-	Msg("MirrorInit... ");
-	mirrorInit();
-	if (!mirrorInitialized) {
-		LUA->PushNumber(-1);
-		return 1;
-	}
-	Msg("OK\n");
+	HookDirectX();
 
 	pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
 
@@ -472,7 +232,7 @@ LUA_FUNCTION(VRMOD_Init) {
 
 	pInput = vr::VRInput();
 	if (pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
-		Msg("Error: vrmod_action_manifest.json not found!");
+		MessageBoxA(NULL, "vrmod_action_manifest.json not found!", NULL, MB_OK);
 	}
 	pInput->GetActionSetHandle("/actions/vrmod", &actionSet);
 	pInput->GetActionHandle("/actions/vrmod/in/boolean_primaryfire", &boolean_primaryfire);
@@ -501,6 +261,11 @@ LUA_FUNCTION(VRMOD_Init) {
 LUA_FUNCTION(VRMOD_Shutdown) {
 	vr::VR_Shutdown();
 	pSystem = NULL;
+	d3d9Device->Release();
+	d3d11Device->Release();
+	d3d11Context->Release();
+	d3d11Texture = NULL;
+	sharedTexture = NULL;
 	return 0;
 }
 
@@ -679,7 +444,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(2);
+	LUA->PushNumber(3);
 	return 1;
 }
 
@@ -688,8 +453,7 @@ LUA_FUNCTION(VRMOD_GetVersion) {
 //*************************************************************************
 GMOD_MODULE_OPEN()
 {
-	HMODULE tier0 = GetModuleHandle("tier0.dll");
-	Msg = (msg)GetProcAddress(tier0, "Msg");
+
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_Init");
