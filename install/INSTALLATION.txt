@@ -1,0 +1,3 @@
+Go to the folder where you have gmod and other steam games installed (such as C:\Program Files (x86)\Steam\steamapps\common)
+drag the GarrysMod folder that is next to this INSTALLATION.txt into that folder.
+It should automatically put the files in the right places.
