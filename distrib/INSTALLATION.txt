@@ -1,4 +1,0 @@
-gmcl_vrmod_win32.dll			-> GarrysMod\garrysmod\lua\bin\     (you may need to create the "bin" folder manually)
-vrmod_action_manifest.json 		-> GarrysMod\garrysmod\lua\bin\
-vrmod_bindings_vive_controller.json	-> GarrysMod\garrysmod\lua\bin\
-openvr_api.dll				-> GarrysMod\bin\
