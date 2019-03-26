@@ -11,9 +11,9 @@ If you want to compile the module yourself using visual studio:
 -get the gmod lua headers https://github.com/Facepunch/gmod-module-base/tree/development
 -get MinHook (header and lib, which you can build yourself) https://github.com/TsudaKageyu/minhook
 
-SPECIAL THANKS to 
+SPECIAL THANKS TO:
 
 UselessGhost (https://steamcommunity.com/id/UselessGhost)
 who shared tips and their proof of concept gmod vr module source on the VRMod Workshop Discussions,
-on which the current directx hooking and texture sharing method is very heavily based on.
+where the current directx hooking and texture sharing code is borrowed from.
 https://bitbucket.org/uselessghost/gmcl_openvr
