@@ -18,7 +18,7 @@
 vr::IVRSystem * pSystem = NULL;
 vr::IVRInput * pInput = NULL;
 vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
-
+//todo: handle actions dynamically
 vr::VRActionSetHandle_t actionSet			= vr::k_ulInvalidActionSetHandle;
 vr::VRActiveActionSet_t activeActionSet		= { 0 };
 vr::VRActionHandle_t boolean_primaryfire	= vr::k_ulInvalidActionHandle;
@@ -86,7 +86,7 @@ void HookDirectX() {
 		return;
 	}
 
-	//create dx9 device (for getting CreateTexture address?)
+	//create dx9 device to get CreateTexture address
 	D3DPRESENT_PARAMETERS params;
 	ZeroMemory(&params, sizeof(params));
 	params.Windowed = TRUE;
@@ -224,7 +224,7 @@ LUA_FUNCTION(VRMOD_Init) {
 	calculatedHorizontalOffset = -xoffset;
 	horizontalOffset = -xoffset;
 
-	//prepare action related stuff
+	//prepare action related stuff (todo: handle actions dynamically)
 	char dir[256];
 	GetCurrentDirectory(256, dir);
 	char path[256];
@@ -356,6 +356,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 //*************************************************************************
 //                          LUA VRMOD_GetActions
 //*************************************************************************
+//todo: handle actions dynamically
 LUA_FUNCTION(VRMOD_GetActions) {
 	vr::InputDigitalActionData_t digitalActionData;
 	vr::InputAnalogActionData_t analogActionData;
@@ -423,6 +424,15 @@ LUA_FUNCTION(VRMOD_GetFOV) {
 }
 
 //*************************************************************************
+//                        LUA VRMOD_GetRecommendedResolution
+//*************************************************************************
+LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
+	LUA->PushNumber(recommendedWidth*2); //return full res, not just one eye
+	LUA->PushNumber(recommendedHeight);
+	return 2;
+}
+
+//*************************************************************************
 //                           LUA VRMOD_GetIPD
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetIPD) {
@@ -444,7 +454,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(3);
+	LUA->PushNumber(4);
 	return 1;
 }
 
@@ -493,6 +503,11 @@ GMOD_MODULE_OPEN()
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_GetFOV");
 	LUA->PushCFunction(VRMOD_GetFOV);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_GetRecommendedResolution");
+	LUA->PushCFunction(VRMOD_GetRecommendedResolution);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
