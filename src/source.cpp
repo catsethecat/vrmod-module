@@ -255,6 +255,8 @@ LUA_FUNCTION(VRMOD_Init) {
 			g_actionCount++;
 		}
 	}
+	
+	fclose(file);
 
 	g_activeActionSet.ulActionSet = g_actionSet;
 
