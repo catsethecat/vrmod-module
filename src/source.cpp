@@ -361,7 +361,6 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 //*************************************************************************
 //                          LUA VRMOD_GetActions
 //*************************************************************************
-//todo: handle actions dynamically
 LUA_FUNCTION(VRMOD_GetActions) {
 	vr::InputDigitalActionData_t digitalActionData;
 	vr::InputAnalogActionData_t analogActionData;
