@@ -24,11 +24,10 @@ typedef struct {
 vr::IVRSystem*			g_pSystem = NULL;
 vr::IVRInput*			g_pInput = NULL;
 vr::TrackedDevicePose_t g_poses[vr::k_unMaxTrackedDeviceCount];
-vr::VRActionSetHandle_t g_actionSet = vr::k_ulInvalidActionSetHandle;
+vr::VRActionSetHandle_t g_actionSet	= vr::k_ulInvalidActionSetHandle;
 vr::VRActiveActionSet_t g_activeActionSet = { 0 };
 action					g_actions[64];
 int						g_actionCount = 0;
-
 
 //directx
 ID3D11DeviceContext*	g_d3d11Context;
@@ -40,7 +39,9 @@ HANDLE					g_sharedTexture = NULL;
 //other
 float		g_horizontalFOV = 0;
 float		g_horizontalOffset = 0;
+float		g_verticalOffset = 0;
 float		g_calculatedHorizontalOffset = 0;
+float		g_calculatedVerticalOffset = 0;
 uint32_t	g_recommendedWidth = 0;
 uint32_t	g_recommendedHeight = 0;
 
@@ -163,16 +164,16 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 	//submit Left eye
 	textureBounds.uMin = 0.0f - g_horizontalOffset * 0.25f;
 	textureBounds.uMax = 0.5f - g_horizontalOffset * 0.25f;
-	textureBounds.vMin = 0.0f;
-	textureBounds.vMax = 1.0f;
+	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
+	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
 
 	vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &vrTexture, &textureBounds);
 
 	//submit Right eye
 	textureBounds.uMin = 0.5f + g_horizontalOffset * 0.25f;
 	textureBounds.uMax = 1.0f + g_horizontalOffset * 0.25f;
-	textureBounds.vMin = 0.0f;
-	textureBounds.vMax = 1.0f;
+	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
+	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
 
 	vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &vrTexture, &textureBounds);
 
@@ -215,7 +216,9 @@ LUA_FUNCTION(VRMOD_Init) {
 	float fov_ny = 2.0f * (atanf(fabsf((-1.0f - yoffset) / yscale)) * 180 / 3.141592654);
 	g_horizontalFOV = max(fov_px, fov_nx);
 	g_calculatedHorizontalOffset = -xoffset;
-	g_horizontalOffset = -xoffset;
+	g_calculatedVerticalOffset = -yoffset;
+	g_horizontalOffset = g_calculatedHorizontalOffset;
+	g_verticalOffset = g_calculatedVerticalOffset;
 
 	//prepare action related stuff
 	char dir[256];
@@ -255,7 +258,7 @@ LUA_FUNCTION(VRMOD_Init) {
 			g_actionCount++;
 		}
 	}
-	
+
 	fclose(file);
 
 	g_activeActionSet.ulActionSet = g_actionSet;
@@ -397,11 +400,13 @@ LUA_FUNCTION(VRMOD_GetActions) {
 //                        LUA VRMOD_SetDisplayOffset
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetDisplayOffset) {
-	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER)) {
+	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER) && LUA->IsType(2, GarrysMod::Lua::Type::NUMBER)) {
 		g_horizontalOffset = LUA->GetNumber(1);
+		g_verticalOffset = LUA->GetNumber(2);
 	}
 	else {
 		g_horizontalOffset = g_calculatedHorizontalOffset;
+		g_verticalOffset = g_calculatedVerticalOffset;
 	}
 	return 0;
 }
@@ -446,7 +451,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(5);
+	LUA->PushNumber(6);
 	return 1;
 }
 
