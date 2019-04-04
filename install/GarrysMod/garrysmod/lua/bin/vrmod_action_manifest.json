@@ -39,6 +39,10 @@
       "type": "vector2"
     },
     {
+      "name": "/actions/vrmod/in/vector1_throttle",
+      "type": "vector1"
+    },
+    {
       "name": "/actions/vrmod/in/boolean_walk",
       "type": "boolean"
     },
