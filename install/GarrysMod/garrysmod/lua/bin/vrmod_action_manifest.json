@@ -67,6 +67,10 @@
       "type": "boolean"
     },
     {
+      "name": "/actions/vrmod/in/boolean_jump",
+      "type": "boolean"
+    },
+    {
       "name": "/actions/vrmod/in/boolean_undo",
       "type": "boolean"
     }

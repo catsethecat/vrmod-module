@@ -68,10 +68,13 @@
             {
                "inputs" : {
                   "click" : {
-                     "output" : "/actions/vrmod/in/boolean_walk"
+                     "output" : "/actions/vrmod/in/boolean_jump"
                   },
                   "position" : {
                      "output" : "/actions/vrmod/in/vector2_walkdirection"
+                  },
+                  "touch" : {
+                     "output" : "/actions/vrmod/in/boolean_walk"
                   }
                },
                "mode" : "trackpad",
@@ -94,6 +97,15 @@
                },
                "mode" : "trigger",
                "path" : "/user/hand/left/input/trigger"
+            },
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/boolean_reload"
+                  }
+               },
+               "mode" : "button",
+               "path" : "/user/hand/left/input/grip"
             }
          ]
       }
