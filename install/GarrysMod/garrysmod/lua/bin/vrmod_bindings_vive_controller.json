@@ -34,9 +34,6 @@
             },
             {
                "inputs" : {
-                  "center" : {
-                     "output" : "/actions/vrmod/in/boolean_use"
-                  },
                   "east" : {
                      "output" : "/actions/vrmod/in/boolean_turnright"
                   },
@@ -106,6 +103,37 @@
                },
                "mode" : "button",
                "path" : "/user/hand/left/input/grip"
+            },
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/boolean_use"
+                  }
+               },
+               "mode" : "trigger",
+               "path" : "/user/hand/right/input/trigger"
+            },
+            {
+               "inputs" : {
+                  "position" : {
+                     "output" : "/actions/vrmod/in/vector2_physgunrotate"
+                  }
+               },
+               "mode" : "trackpad",
+               "path" : "/user/hand/right/input/trackpad"
+            },
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/boolean_left_pickup"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {
+                  "force_input" : "",
+                  "haptic_amplitude" : "0"
+               },
+               "path" : "/user/hand/left/input/trigger"
             }
          ]
       }

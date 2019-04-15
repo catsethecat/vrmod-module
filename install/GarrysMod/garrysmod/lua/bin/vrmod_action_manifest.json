@@ -39,6 +39,10 @@
       "type": "vector2"
     },
     {
+      "name": "/actions/vrmod/in/vector2_physgunrotate",
+      "type": "vector2"
+    },
+    {
       "name": "/actions/vrmod/in/vector1_throttle",
       "type": "vector1"
     },
@@ -68,6 +72,10 @@
     },
     {
       "name": "/actions/vrmod/in/boolean_jump",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_left_pickup",
       "type": "boolean"
     },
     {
