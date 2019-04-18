@@ -115,8 +115,11 @@
             },
             {
                "inputs" : {
+                  "click" : {
+                     "output" : "/actions/vrmod/in/boolean_right_select"
+                  },
                   "position" : {
-                     "output" : "/actions/vrmod/in/vector2_physgunrotate"
+                     "output" : "/actions/vrmod/in/vector2_right_analog"
                   }
                },
                "mode" : "trackpad",

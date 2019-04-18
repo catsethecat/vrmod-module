@@ -39,7 +39,7 @@
       "type": "vector2"
     },
     {
-      "name": "/actions/vrmod/in/vector2_physgunrotate",
+      "name": "/actions/vrmod/in/vector2_right_analog",
       "type": "vector2"
     },
     {
@@ -76,6 +76,10 @@
     },
     {
       "name": "/actions/vrmod/in/boolean_left_pickup",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/vrmod/in/boolean_right_select",
       "type": "boolean"
     },
     {
