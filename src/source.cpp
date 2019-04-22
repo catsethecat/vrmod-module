@@ -38,6 +38,7 @@ HANDLE					g_sharedTexture = NULL;
 
 //other
 float		g_horizontalFOV = 0;
+float		g_verticalFOV = 0;
 float		g_horizontalOffset = 0;
 float		g_verticalOffset = 0;
 float		g_calculatedHorizontalOffset = 0;
@@ -210,11 +211,14 @@ LUA_FUNCTION(VRMOD_Init) {
 	float xoffset = proj.m[0][2];
 	float yscale = proj.m[1][1];
 	float yoffset = proj.m[1][2];
-	float fov_px = 2.0f * (atanf(fabsf((1.0f - xoffset) / xscale)) * 180 / 3.141592654);
-	float fov_nx = 2.0f * (atanf(fabsf((-1.0f - xoffset) / xscale)) * 180 / 3.141592654);
-	float fov_py = 2.0f * (atanf(fabsf((1.0f - yoffset) / yscale)) * 180 / 3.141592654);
-	float fov_ny = 2.0f * (atanf(fabsf((-1.0f - yoffset) / yscale)) * 180 / 3.141592654);
-	g_horizontalFOV = max(fov_px, fov_nx);
+	float tan_px = fabsf((1.0f - xoffset) / xscale);
+	float tan_nx = fabsf((-1.0f - xoffset) / xscale);
+	float tan_py = fabsf((1.0f - yoffset) / yscale);
+	float tan_ny = fabsf((-1.0f - yoffset) / yscale);
+	float w = tan_px + tan_nx;
+	float h = tan_py + tan_ny;
+	g_horizontalFOV = atan(w / 2.0f) * 180 / 3.141592654 * 2;
+	g_verticalFOV = atan(h / 2.0f) * 180 / 3.141592654 * 2;
 	g_calculatedHorizontalOffset = -xoffset;
 	g_calculatedVerticalOffset = -yoffset;
 	g_horizontalOffset = g_calculatedHorizontalOffset;
@@ -451,7 +455,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(6);
+	LUA->PushNumber(7);
 	return 1;
 }
 
