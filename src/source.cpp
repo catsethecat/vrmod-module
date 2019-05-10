@@ -334,13 +334,12 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 			ang.x = asin(mat.m[1][2]) * (180.0 / 3.141592654);
 			ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0 / 3.141592654);
 			ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0 / 3.141592654);
-			//todo check the correct axis for these
-			vel.x = pose.vVelocity.v[0];
-			vel.y = pose.vVelocity.v[1];
-			vel.z = pose.vVelocity.v[2];
-			angvel.x = pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
-			angvel.y = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
-			angvel.z = pose.vAngularVelocity.v[2] * (180.0 / 3.141592654);
+			vel.x = -pose.vVelocity.v[2];
+			vel.y = -pose.vVelocity.v[0];
+			vel.z = pose.vVelocity.v[1];
+			angvel.x = -pose.vAngularVelocity.v[2] * (180.0 / 3.141592654);
+			angvel.y = -pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
+			angvel.z = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
 			
 			//push a table for the pose
 			LUA->CreateTable();
@@ -398,6 +397,21 @@ LUA_FUNCTION(VRMOD_GetActions) {
 	}
 
 	return 1;
+}
+
+//*************************************************************************
+//                          LUA VRMOD_TriggerHaptic
+//*************************************************************************
+LUA_FUNCTION(VRMOD_TriggerHaptic) {
+	const char * actionName = LUA->CheckString(1);
+	unsigned int nameLen = strlen(actionName);
+	for (int i = 0; i < g_actionCount; i++) {
+		if (strlen(g_actions[i].name) == nameLen && memcmp(g_actions[i].name, actionName, nameLen) == 0) {
+			g_pInput->TriggerHapticVibrationAction(g_actions[i].handle, LUA->CheckNumber(2), LUA->CheckNumber(3), LUA->CheckNumber(4), LUA->CheckNumber(5), vr::k_ulInvalidInputValueHandle);
+			break;
+		}
+	}
+	return 0;
 }
 
 //*************************************************************************
@@ -465,7 +479,6 @@ LUA_FUNCTION(VRMOD_GetVersion) {
 GMOD_MODULE_OPEN()
 {
 
-
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_Init");
 	LUA->PushCFunction(VRMOD_Init);
@@ -489,6 +502,11 @@ GMOD_MODULE_OPEN()
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_GetActions");
 	LUA->PushCFunction(VRMOD_GetActions);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_TriggerHaptic");
+	LUA->PushCFunction(VRMOD_TriggerHaptic);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
