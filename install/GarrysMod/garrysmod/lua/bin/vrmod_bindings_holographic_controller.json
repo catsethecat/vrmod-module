@@ -16,11 +16,11 @@
          "poses" : [
             {
                "output" : "/actions/vrmod/in/pose_righthand",
-               "path" : "/user/hand/right/pose/handgrip"
+               "path" : "/user/hand/right/pose/tip"
             },
             {
                "output" : "/actions/vrmod/in/pose_lefthand",
-               "path" : "/user/hand/left/pose/handgrip"
+               "path" : "/user/hand/left/pose/tip"
             }
          ],
          "sources" : [
@@ -57,10 +57,7 @@
                      "output" : "/actions/vrmod/in/boolean_turnleft"
                   }
                },
-               "mode" : "dpad",
-               "parameters" : {
-                  "sub_mode" : "click"
-               },
+               "mode" : "dpad_click",
                "path" : "/user/hand/right/input/trackpad"
             },
             {
@@ -131,7 +128,6 @@
                },
                "mode" : "button",
                "parameters" : {
-                  "force_input" : "",
                   "haptic_amplitude" : "0"
                },
                "path" : "/user/hand/left/input/trigger"
@@ -151,7 +147,7 @@
          ]
       }
    },
-   "controller_type" : "vive_controller",
+   "controller_type" : "holographic_controller",
    "description" : "default vrmod bindings",
    "name" : "default vrmod bindings",
    "options" : {},

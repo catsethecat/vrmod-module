@@ -3,6 +3,14 @@
    {
       "controller_type": "vive_controller",
       "binding_url": "vrmod_bindings_vive_controller.json"
+   },
+   {
+      "controller_type": "oculus_touch",
+      "binding_url": "vrmod_bindings_oculus_touch.json"
+   },
+   {
+      "controller_type": "holographic_controller",
+      "binding_url": "vrmod_bindings_holographic_controller.json"
    }
   ], 
   "actions": [
@@ -35,11 +43,19 @@
       "type": "pose"
     },
     {
+      "name": "/actions/vrmod/out/vibration_left",
+      "type": "vibration"
+    },
+    {
+      "name": "/actions/vrmod/out/vibration_right",
+      "type": "vibration"
+    },
+    {
       "name": "/actions/vrmod/in/vector2_walkdirection",
       "type": "vector2"
     },
     {
-      "name": "/actions/vrmod/in/vector2_right_analog",
+      "name": "/actions/vrmod/in/vector2_right_joystick",
       "type": "vector2"
     },
     {
