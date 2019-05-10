@@ -55,7 +55,7 @@
       "type": "vector2"
     },
     {
-      "name": "/actions/vrmod/in/vector2_right_joystick",
+      "name": "/actions/vrmod/in/vector2_right_analog",
       "type": "vector2"
     },
     {
