@@ -43,6 +43,16 @@
       "type": "pose"
     },
     {
+      "name": "/actions/vrmod/in/skeleton_lefthand",
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/left"
+    },
+    {
+      "name": "/actions/vrmod/in/skeleton_righthand",
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/right"
+    },
+    {
       "name": "/actions/vrmod/out/vibration_left",
       "type": "vibration"
     },
@@ -55,7 +65,7 @@
       "type": "vector2"
     },
     {
-      "name": "/actions/vrmod/in/vector2_right_analog",
+      "name": "/actions/vrmod/in/vector2_right_joystick",
       "type": "vector2"
     },
     {

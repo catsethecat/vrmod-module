@@ -16,11 +16,21 @@
          "poses" : [
             {
                "output" : "/actions/vrmod/in/pose_righthand",
-               "path" : "/user/hand/right/pose/handgrip"
+               "path" : "/user/hand/right/pose/raw"
             },
             {
                "output" : "/actions/vrmod/in/pose_lefthand",
-               "path" : "/user/hand/left/pose/handgrip"
+               "path" : "/user/hand/left/pose/raw"
+            }
+         ],
+         "skeleton" : [
+            {
+               "output" : "/actions/vrmod/in/skeleton_lefthand",
+               "path" : "/user/hand/left/input/skeleton/left"
+            },
+            {
+               "output" : "/actions/vrmod/in/skeleton_righthand",
+               "path" : "/user/hand/right/input/skeleton/right"
             }
          ],
          "sources" : [
@@ -142,7 +152,7 @@
                      "output" : "/actions/vrmod/in/boolean_right_select"
                   },
                   "position" : {
-                     "output" : "/actions/vrmod/in/vector2_right_analog"
+                     "output" : "/actions/vrmod/in/vector2_right_joystick"
                   }
                },
                "mode" : "trackpad",

@@ -16,11 +16,11 @@
          "poses" : [
             {
                "output" : "/actions/vrmod/in/pose_righthand",
-               "path" : "/user/hand/right/pose/tip"
+               "path" : "/user/hand/right/pose/raw"
             },
             {
                "output" : "/actions/vrmod/in/pose_lefthand",
-               "path" : "/user/hand/left/pose/tip"
+               "path" : "/user/hand/left/pose/raw"
             }
          ],
          "sources" : [
@@ -142,7 +142,7 @@
                      "output" : "/actions/vrmod/in/boolean_right_select"
                   },
                   "position" : {
-                     "output" : "/actions/vrmod/in/vector2_right_analog"
+                     "output" : "/actions/vrmod/in/vector2_right_joystick"
                   }
                },
                "mode" : "joystick",
