@@ -372,6 +372,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 LUA_FUNCTION(VRMOD_GetActions) {
 	vr::InputDigitalActionData_t digitalActionData;
 	vr::InputAnalogActionData_t analogActionData;
+	vr::VRSkeletalSummaryData_t skeletalSummaryData;
 
 	LUA->CreateTable();
 
@@ -392,6 +393,18 @@ LUA_FUNCTION(VRMOD_GetActions) {
 			LUA->SetField(-2, "x");
 			LUA->PushNumber(analogActionData.y);
 			LUA->SetField(-2, "y");
+			LUA->SetField(-2, g_actions[i].name);
+		}
+		else if (strcmp(g_actions[i].type, "skeleton") == 0) {
+			g_pInput->GetSkeletalSummaryData(g_actions[i].handle, &skeletalSummaryData);
+			LUA->CreateTable();
+			LUA->CreateTable();
+			for (int j = 0; j < 5; j++) {
+				LUA->PushNumber(j+1);
+				LUA->PushNumber(skeletalSummaryData.flFingerCurl[j]);
+				LUA->SetTable(-3);
+			}
+			LUA->SetField(-2, "fingerCurls");
 			LUA->SetField(-2, g_actions[i].name);
 		}
 	}
@@ -460,7 +473,7 @@ LUA_FUNCTION(VRMOD_GetIPD) {
 //*************************************************************************
 //                        LUA VRMOD_HMDPresent
 //*************************************************************************
-LUA_FUNCTION(VRMOD_HMDPresent) {
+LUA_FUNCTION(VRMOD_IsHMDPresent) {
 	LUA->PushBool(vr::VR_IsHmdPresent());
 	return 1;
 }
@@ -469,7 +482,7 @@ LUA_FUNCTION(VRMOD_HMDPresent) {
 //                        LUA VRMOD_GetVersion
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(7);
+	LUA->PushNumber(8);
 	return 1;
 }
 
@@ -535,8 +548,8 @@ GMOD_MODULE_OPEN()
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_HMDPresent");
-	LUA->PushCFunction(VRMOD_HMDPresent);
+	LUA->PushString("VRMOD_IsHMDPresent");
+	LUA->PushCFunction(VRMOD_IsHMDPresent);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
