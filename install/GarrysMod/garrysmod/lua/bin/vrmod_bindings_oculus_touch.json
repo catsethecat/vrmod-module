@@ -23,6 +23,16 @@
                "path" : "/user/hand/left/pose/raw"
             }
          ],
+         "skeleton" : [
+            {
+               "output" : "/actions/vrmod/in/skeleton_lefthand",
+               "path" : "/user/hand/left/input/skeleton/left"
+            },
+            {
+               "output" : "/actions/vrmod/in/skeleton_righthand",
+               "path" : "/user/hand/right/input/skeleton/right"
+            }
+         ],
          "sources" : [
             {
                "inputs" : {
