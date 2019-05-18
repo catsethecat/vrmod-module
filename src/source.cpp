@@ -282,6 +282,7 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 	g_d3d11Context->Release();
 	g_d3d11Texture = NULL;
 	g_sharedTexture = NULL;
+	g_actionCount = 0;
 	return 0;
 }
 
