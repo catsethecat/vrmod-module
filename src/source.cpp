@@ -95,8 +95,13 @@ void HookDirectX() {
 	}
 
 	//add the hook
+#ifdef _WIN64
+	DWORD64* dVtable = (DWORD64*)g_d3d9Device;
+	dVtable = (DWORD64*)dVtable[0];
+#else
 	DWORD* dVtable = (DWORD*)g_d3d9Device;
 	dVtable = (DWORD*)dVtable[0];
+#endif
 
 	CreateTexture_orig = (CreateTexture)dVtable[23];
 
@@ -147,8 +152,13 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 			return 0;
 		}
 		//dont need the hook anymore
+#ifdef _WIN64
+		DWORD64* dVtable = (DWORD64*)g_d3d9Device;
+		dVtable = (DWORD64*)dVtable[0];
+#else
 		DWORD* dVtable = (DWORD*)g_d3d9Device;
 		dVtable = (DWORD*)dVtable[0];
+#endif
 		MH_DisableHook((DWORD_PTR*)dVtable[23]);
 		MH_RemoveHook((DWORD_PTR*)dVtable[23]);
 		if (MH_Uninitialize() != MH_OK)
