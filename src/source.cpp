@@ -6,26 +6,31 @@
 #include <openvr.h>
 #include <MinHook.h>
 
-
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "d3d9.lib")
 
 //*************************************************************************
-//                             globals
+//	Globals
 //*************************************************************************
 
 //openvr related
 typedef struct {
-	vr::VRActionHandle_t handle = vr::k_ulInvalidActionHandle;
+	vr::VRActionHandle_t handle;
 	char fullname[256];
 	char type[256];
 	char* name;
 }action;
+typedef struct {
+	vr::VRActionSetHandle_t handle;
+	char name[256];
+}actionSet;
 vr::IVRSystem*			g_pSystem = NULL;
 vr::IVRInput*			g_pInput = NULL;
 vr::TrackedDevicePose_t g_poses[vr::k_unMaxTrackedDeviceCount];
-vr::VRActionSetHandle_t g_actionSet	= vr::k_ulInvalidActionSetHandle;
-vr::VRActiveActionSet_t g_activeActionSet = { 0 };
+actionSet				g_actionSets[16];
+int						g_actionSetCount = 0;
+vr::VRActiveActionSet_t g_activeActionSets[16];
+int						g_activeActionSetCount = 0;
 action					g_actions[64];
 int						g_actionCount = 0;
 
@@ -37,17 +42,17 @@ IDirect3DDevice9*		g_d3d9Device;
 HANDLE					g_sharedTexture = NULL;
 
 //other
-float		g_horizontalFOV = 0;
-float		g_verticalFOV = 0;
-float		g_horizontalOffset = 0;
-float		g_verticalOffset = 0;
-float		g_calculatedHorizontalOffset = 0;
-float		g_calculatedVerticalOffset = 0;
-uint32_t	g_recommendedWidth = 0;
-uint32_t	g_recommendedHeight = 0;
+float					g_horizontalFOV = 0;
+float					g_verticalFOV = 0;
+float					g_horizontalOffset = 0;
+float					g_verticalOffset = 0;
+float					g_calculatedHorizontalOffset = 0;
+float					g_calculatedVerticalOffset = 0;
+uint32_t				g_recommendedWidth = 0;
+uint32_t				g_recommendedHeight = 0;
 
 //*************************************************************************
-//                         CreateTexture Hook
+//	CreateTexture Hook
 //*************************************************************************
 
 typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
@@ -62,7 +67,7 @@ HRESULT APIENTRY CreateTexture_hook(IDirect3DDevice9* pDevice, UINT w, UINT h, U
 };
 
 //*************************************************************************
-//                             HookDirectX
+//	HookDirectX
 //*************************************************************************
 
 void HookDirectX() {
@@ -128,7 +133,7 @@ void HookDirectX() {
 }
 
 //*************************************************************************
-//                           LUA VRMOD_MirrorFrame
+//	Lua function: VRMOD_MirrorFrame()
 //*************************************************************************
 LUA_FUNCTION(VRMOD_MirrorFrame) {
 	if (g_sharedTexture == NULL)
@@ -191,8 +196,11 @@ LUA_FUNCTION(VRMOD_MirrorFrame) {
 	return 0;
 }
 
+
+
 //*************************************************************************
-//                             LUA VRMOD_Init
+//	Lua function: VRMOD_Init()
+//	Returns: 0 on success, -1 on failure
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Init) {
 
@@ -215,7 +223,6 @@ LUA_FUNCTION(VRMOD_Init) {
 
 	g_pSystem->GetRecommendedRenderTargetSize(&g_recommendedWidth, &g_recommendedHeight);
 
-	//get FOV and display offset values
 	vr::HmdMatrix44_t proj = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
 	float xscale = proj.m[0][0];
 	float xoffset = proj.m[0][2];
@@ -234,11 +241,21 @@ LUA_FUNCTION(VRMOD_Init) {
 	g_horizontalOffset = g_calculatedHorizontalOffset;
 	g_verticalOffset = g_calculatedVerticalOffset;
 
-	//prepare action related stuff
-	char dir[256];
-	GetCurrentDirectory(256, dir);
+	LUA->PushNumber(0);
+	return 1;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_SetActionManifest(fileName)
+//	Returns: -1 on failure
+//*************************************************************************
+LUA_FUNCTION(VRMOD_SetActionManifest) {
+	const char * fileName = LUA->CheckString(1);
+
+	char currentDir[256];
+	GetCurrentDirectory(256, currentDir);
 	char path[256];
-	sprintf_s(path, 256, "%s\\garrysmod\\lua\\bin\\vrmod_action_manifest.json", dir);
+	sprintf_s(path, 256, "%s\\garrysmod\\data\\%s", currentDir, fileName);
 
 	g_pInput = vr::VRInput();
 	if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
@@ -246,12 +263,11 @@ LUA_FUNCTION(VRMOD_Init) {
 		LUA->PushNumber(-1);
 		return 1;
 	}
-	g_pInput->GetActionSetHandle("/actions/vrmod", &g_actionSet);
 
 	FILE * file = NULL;
 	fopen_s(&file, path, "r");
 	if (file == NULL) {
-		MessageBoxA(NULL, "failed to open vrmod_action_manifest.json", NULL, MB_OK);
+		MessageBoxA(NULL, "failed to open action manifest", NULL, MB_OK);
 		LUA->PushNumber(-1);
 		return 1;
 	}
@@ -275,14 +291,42 @@ LUA_FUNCTION(VRMOD_Init) {
 
 	fclose(file);
 
-	g_activeActionSet.ulActionSet = g_actionSet;
-
-	LUA->PushNumber(0);
-	return 1;
+	return 0;
 }
 
 //*************************************************************************
-//                            LUA VRMOD_Shutdown
+//	Lua function: VRMOD_SetActiveActionSets(name, name, ...)
+//*************************************************************************
+LUA_FUNCTION(VRMOD_SetActiveActionSets) {
+	g_activeActionSetCount = 0;
+	for (int i = 0; i < 16; i++) {
+		if (LUA->GetType(i + 1) == GarrysMod::Lua::Type::STRING) {
+			const char * actionSetName = LUA->CheckString(i+1);
+			int actionSetIndex = -1;
+			for (int j = 0; j < g_actionSetCount; j++) {
+				if (strcmp(actionSetName, g_actionSets[j].name) == 0) {
+					actionSetIndex = j;
+					break;
+				}
+			}
+			if (actionSetIndex == -1) {
+				g_pInput->GetActionSetHandle(actionSetName, &g_actionSets[g_actionSetCount].handle);
+				memcpy(g_actionSets[g_actionSetCount].name, actionSetName,strlen(actionSetName));
+				actionSetIndex = g_actionSetCount;
+				g_actionSetCount++;
+			}
+			g_activeActionSets[g_activeActionSetCount].ulActionSet = g_actionSets[actionSetIndex].handle;
+			g_activeActionSetCount++;
+		}
+		else {
+			break;
+		}
+	}
+	return 0;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_Shutdown()
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Shutdown) {
 	vr::VR_Shutdown();
@@ -293,20 +337,23 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 	g_d3d11Texture = NULL;
 	g_sharedTexture = NULL;
 	g_actionCount = 0;
+	g_actionSetCount = 0;
+	g_activeActionSetCount = 0;
 	return 0;
 }
 
 //*************************************************************************
-//                            LUA VRMOD_UpdatePoses
+//	Lua function: VRMOD_UpdatePoses()
 //*************************************************************************
 LUA_FUNCTION(VRMOD_UpdatePoses) {
 	vr::VRCompositor()->WaitGetPoses(g_poses, vr::k_unMaxTrackedDeviceCount, NULL, 0);
-	g_pInput->UpdateActionState(&g_activeActionSet, sizeof(g_activeActionSet), 1);
+	g_pInput->UpdateActionState(g_activeActionSets, sizeof(vr::VRActiveActionSet_t), g_activeActionSetCount);
 	return 0;
 }
 
 //*************************************************************************
-//                             LUA VRMOD_GetPoses
+//	Lua function: VRMOD_GetPoses()
+//	Returns: table of pose data
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetPoses) {
 	vr::InputPoseActionData_t poseActionData;
@@ -378,7 +425,8 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 
 
 //*************************************************************************
-//                          LUA VRMOD_GetActions
+//	Lua function: VRMOD_GetActions()
+//	Returns: table of action data
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetActions) {
 	vr::InputDigitalActionData_t digitalActionData;
@@ -424,7 +472,7 @@ LUA_FUNCTION(VRMOD_GetActions) {
 }
 
 //*************************************************************************
-//                          LUA VRMOD_TriggerHaptic
+//	Lua function: VRMOD_TriggerHaptic(actionName, delay, duration, frequency, amplitude)
 //*************************************************************************
 LUA_FUNCTION(VRMOD_TriggerHaptic) {
 	const char * actionName = LUA->CheckString(1);
@@ -439,7 +487,7 @@ LUA_FUNCTION(VRMOD_TriggerHaptic) {
 }
 
 //*************************************************************************
-//                        LUA VRMOD_SetDisplayOffset
+//	Lua function: VRMOD_SetDisplayOffset(horizontal, vertical)
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 	if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER) && LUA->IsType(2, GarrysMod::Lua::Type::NUMBER)) {
@@ -454,7 +502,8 @@ LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 }
 
 //*************************************************************************
-//                        LUA VRMOD_GetFOV
+//	Lua function: VRMOD_GetFOV()
+//	Returns: horizontal fov, aspect ratio
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetFOV) {
 	LUA->PushNumber(g_horizontalFOV);
@@ -463,7 +512,8 @@ LUA_FUNCTION(VRMOD_GetFOV) {
 }
 
 //*************************************************************************
-//                        LUA VRMOD_GetRecommendedResolution
+//	Lua function: VRMOD_GetRecommendedResolution()
+//	Returns: width, height
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
 	LUA->PushNumber(g_recommendedWidth*2); //return full res, not just one eye
@@ -472,7 +522,8 @@ LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
 }
 
 //*************************************************************************
-//                           LUA VRMOD_GetIPD
+//	Lua function: VRMOD_GetIPD()
+//	Returns: ipd, Z transform
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetIPD) {
 	vr::HmdMatrix34_t eyeToHeadRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right); //units are in meters
@@ -482,7 +533,8 @@ LUA_FUNCTION(VRMOD_GetIPD) {
 }
 
 //*************************************************************************
-//                        LUA VRMOD_HMDPresent
+//	Lua function: VRMOD_HMDPresent()
+//	Returns: true if a HMD is present
 //*************************************************************************
 LUA_FUNCTION(VRMOD_IsHMDPresent) {
 	LUA->PushBool(vr::VR_IsHmdPresent());
@@ -490,10 +542,11 @@ LUA_FUNCTION(VRMOD_IsHMDPresent) {
 }
 
 //*************************************************************************
-//                        LUA VRMOD_GetVersion
+//	Lua function: VRMOD_GetVersion()
+//	Returns: DLL version
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(8);
+	LUA->PushNumber(9);
 	return 1;
 }
 
@@ -506,6 +559,16 @@ GMOD_MODULE_OPEN()
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_Init");
 	LUA->PushCFunction(VRMOD_Init);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_SetActionManifest");
+	LUA->PushCFunction(VRMOD_SetActionManifest);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_SetActiveActionSets");
+	LUA->PushCFunction(VRMOD_SetActiveActionSets);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
