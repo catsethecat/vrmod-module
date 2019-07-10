@@ -44,6 +44,7 @@ HANDLE					g_sharedTexture = NULL;
 //other
 float					g_horizontalFOV = 0;
 float					g_verticalFOV = 0;
+float					g_aspectRatio = 0;
 float					g_horizontalOffset = 0;
 float					g_verticalOffset = 0;
 float					g_calculatedHorizontalOffset = 0;
@@ -236,6 +237,7 @@ LUA_FUNCTION(VRMOD_Init) {
 	float h = tan_py + tan_ny;
 	g_horizontalFOV = atan(w / 2.0f) * 180 / 3.141592654 * 2;
 	g_verticalFOV = atan(h / 2.0f) * 180 / 3.141592654 * 2;
+	g_aspectRatio = w / h;
 	g_calculatedHorizontalOffset = -xoffset;
 	g_calculatedVerticalOffset = -yoffset;
 	g_horizontalOffset = g_calculatedHorizontalOffset;
@@ -295,7 +297,7 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 }
 
 //*************************************************************************
-//	Lua function: VRMOD_SetActiveActionSets(name, name, ...)
+//	Lua function: VRMOD_SetActiveActionSets(name, ...)
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetActiveActionSets) {
 	g_activeActionSetCount = 0;
@@ -507,7 +509,7 @@ LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetFOV) {
 	LUA->PushNumber(g_horizontalFOV);
-	LUA->PushNumber((float)g_recommendedWidth / (float)g_recommendedHeight); //aspect ratio
+	LUA->PushNumber(g_aspectRatio);
 	return 2;
 }
 
@@ -516,7 +518,7 @@ LUA_FUNCTION(VRMOD_GetFOV) {
 //	Returns: width, height
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
-	LUA->PushNumber(g_recommendedWidth*2); //return full res, not just one eye
+	LUA->PushNumber(g_recommendedWidth*2);
 	LUA->PushNumber(g_recommendedHeight);
 	return 2;
 }
@@ -526,9 +528,9 @@ LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
 //	Returns: ipd, Z transform
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetIPD) {
-	vr::HmdMatrix34_t eyeToHeadRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right); //units are in meters
-	LUA->PushNumber(eyeToHeadRight.m[0][3] * 2.0f); //ipd
-	LUA->PushNumber(eyeToHeadRight.m[2][3]); //z (how far back the eye is compared to hmd pos?)
+	vr::HmdMatrix34_t eyeToHeadRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right);
+	LUA->PushNumber(eyeToHeadRight.m[0][3] * 2.0f);
+	LUA->PushNumber(eyeToHeadRight.m[2][3]);
 	return 2;
 }
 
