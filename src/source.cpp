@@ -35,11 +35,13 @@ action					g_actions[64];
 int						g_actionCount = 0;
 
 //directx
+typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
+CreateTexture			g_CreateTextureOriginal = NULL;
 ID3D11DeviceContext*	g_d3d11Context;
 ID3D11Device*			g_d3d11Device;
 ID3D11Texture2D*		g_d3d11Texture = NULL;
-IDirect3DDevice9*		g_d3d9Device;
 HANDLE					g_sharedTexture = NULL;
+DWORD_PTR				g_CreateTextureAddr = NULL;
 
 //other
 float					g_horizontalFOV = 0;
@@ -49,45 +51,39 @@ float					g_horizontalOffset = 0;
 float					g_verticalOffset = 0;
 float					g_calculatedHorizontalOffset = 0;
 float					g_calculatedVerticalOffset = 0;
-uint32_t				g_recommendedWidth = 0;
-uint32_t				g_recommendedHeight = 0;
+
 
 //*************************************************************************
-//	CreateTexture Hook
+//	CreateTexture hook
 //*************************************************************************
 
-typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
-CreateTexture CreateTexture_orig = 0;
-
-HRESULT APIENTRY CreateTexture_hook(IDirect3DDevice9* pDevice, UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9** tex, HANDLE* shared_handle) {
+HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9** tex, HANDLE* shared_handle) {
 	if (g_sharedTexture == NULL) {
 		shared_handle = &g_sharedTexture;
 		pool = D3DPOOL_DEFAULT;
 	}
-	return CreateTexture_orig(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
+	return g_CreateTextureOriginal(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
 };
 
 //*************************************************************************
-//	HookDirectX
+//	FindCreateTexture thread
 //*************************************************************************
 
-void HookDirectX() {
-		
-	//create temporary dx9 interface
+DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 	IDirect3D9* dx = Direct3DCreate9(D3D_SDK_VERSION);
 	if (dx == NULL) {
-		MessageBoxA(NULL, "Direct3DCreate9", NULL, MB_OK);
-		return;
+		MessageBoxA(NULL, "Direct3DCreate9", "VRMod Error", MB_OK);
+		return 0;
 	}
 
-	//create temporary window for dx9 device
 	HWND window = CreateWindowA("BUTTON", "Hooking...", WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, NULL, NULL, GetModuleHandle(NULL), NULL);
 	if (window == NULL) {
-		MessageBoxA(NULL, "CreateWindow", NULL, MB_OK);
-		return;
+		MessageBoxA(NULL, "CreateWindow", "VRMod Error", MB_OK);
+		return 0;
 	}
 
-	//create dx9 device to get CreateTexture address
+	IDirect3DDevice9* d3d9Device = NULL;
+
 	D3DPRESENT_PARAMETERS params;
 	ZeroMemory(&params, sizeof(params));
 	params.Windowed = TRUE;
@@ -95,134 +91,55 @@ void HookDirectX() {
 	params.hDeviceWindow = window;
 	params.BackBufferFormat = D3DFMT_UNKNOWN;
 
-	if (dx->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &g_d3d9Device) != D3D_OK) {
-		MessageBoxA(NULL, "CreateDevice", NULL, MB_OK);
-		return;
+	if (dx->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &d3d9Device) != D3D_OK) {
+		MessageBoxA(NULL, "CreateDevice", "VRMod Error", MB_OK);
+		return 0;
 	}
 
-	//add the hook
-#ifdef _WIN64
-	DWORD64* dVtable = (DWORD64*)g_d3d9Device;
-	dVtable = (DWORD64*)dVtable[0];
-#else
-	DWORD* dVtable = (DWORD*)g_d3d9Device;
-	dVtable = (DWORD*)dVtable[0];
-#endif
+	g_CreateTextureAddr = ((DWORD_PTR*)(((DWORD_PTR*)d3d9Device)[0]))[23];
 
-	CreateTexture_orig = (CreateTexture)dVtable[23];
-
-	if (MH_Initialize() != MH_OK) {
-		MessageBoxA(NULL, "MH_Initialize", NULL, MB_OK);
-		return;
-	}
-
-	if (MH_CreateHook((DWORD_PTR*)dVtable[23], &CreateTexture_hook, reinterpret_cast<void**>(&CreateTexture_orig)) != MH_OK) {
-		MessageBoxA(NULL, "MH_CreateHook", NULL, MB_OK);
-		return;
-	}
-
-	if (MH_EnableHook((DWORD_PTR*)dVtable[23]) != MH_OK) {
-		MessageBoxA(NULL, "MH_EnableHook", NULL, MB_OK);
-		return;
-	}
-
-	//
+	d3d9Device->Release();
 	dx->Release();
 	DestroyWindow(window);
-
-	return;
-}
-
-//*************************************************************************
-//	Lua function: VRMOD_MirrorFrame()
-//*************************************************************************
-LUA_FUNCTION(VRMOD_MirrorFrame) {
-	if (g_sharedTexture == NULL)
-		return 0;
-
-	if (g_d3d11Texture == NULL) {
-		//create dx11 device
-		if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &g_d3d11Device, NULL, &g_d3d11Context) != S_OK) {
-			MessageBoxA(NULL, "D3D11CreateDevice", NULL, MB_OK);
-			return 0;
-		}
-		//get dx11 texture from shared texture handle
-		ID3D11Resource* res;
-		if (FAILED(g_d3d11Device->OpenSharedResource(g_sharedTexture, __uuidof(ID3D11Resource), (void**)&res))) {
-			MessageBoxA(NULL, "OpenSharedResource", NULL, MB_OK);
-			return 0;
-		}
-
-		if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&g_d3d11Texture))) {
-			MessageBoxA(NULL, "QueryInterface", NULL, MB_OK);
-			return 0;
-		}
-		//dont need the hook anymore
-#ifdef _WIN64
-		DWORD64* dVtable = (DWORD64*)g_d3d9Device;
-		dVtable = (DWORD64*)dVtable[0];
-#else
-		DWORD* dVtable = (DWORD*)g_d3d9Device;
-		dVtable = (DWORD*)dVtable[0];
-#endif
-		MH_DisableHook((DWORD_PTR*)dVtable[23]);
-		MH_RemoveHook((DWORD_PTR*)dVtable[23]);
-		if (MH_Uninitialize() != MH_OK)
-		{
-			MessageBoxA(NULL, "MH_Uninitialize", NULL, MB_OK);
-			return 0;
-		}
-	}
-
-	vr::Texture_t vrTexture = { g_d3d11Texture, vr::TextureType_DirectX, vr::ColorSpace_Auto };
-	
-	vr::VRTextureBounds_t textureBounds;
-
-	//submit Left eye
-	textureBounds.uMin = 0.0f - g_horizontalOffset * 0.25f;
-	textureBounds.uMax = 0.5f - g_horizontalOffset * 0.25f;
-	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
-	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
-
-	vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &vrTexture, &textureBounds);
-
-	//submit Right eye
-	textureBounds.uMin = 0.5f + g_horizontalOffset * 0.25f;
-	textureBounds.uMax = 1.0f + g_horizontalOffset * 0.25f;
-	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
-	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
-
-	vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &vrTexture, &textureBounds);
 
 	return 0;
 }
 
+//*************************************************************************
+//	Lua function: VRMOD_GetVersion()
+//	Returns: DLL version
+//*************************************************************************
+LUA_FUNCTION(VRMOD_GetVersion) {
+	LUA->PushNumber(10);
+	return 1;
+}
 
+//*************************************************************************
+//	Lua function: VRMOD_HMDPresent()
+//	Returns: true if a HMD is present
+//*************************************************************************
+LUA_FUNCTION(VRMOD_IsHMDPresent) {
+	LUA->PushBool(vr::VR_IsHmdPresent());
+	return 1;
+}
 
 //*************************************************************************
 //	Lua function: VRMOD_Init()
-//	Returns: 0 on success, -1 on failure
+//	Returns: true on success
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Init) {
-
 	vr::HmdError error = vr::VRInitError_None;
 
 	g_pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
 	if (error != vr::VRInitError_None) {
-		MessageBoxA(NULL, "VR_Init failed", NULL, MB_OK);
-		LUA->PushNumber(-1);
-		return 1;
+		MessageBoxA(NULL, "VR_Init failed", "VRMod Error", MB_OK);
+		return 0;
 	}
 
 	if (!vr::VRCompositor()) {
-		MessageBoxA(NULL, "VRCompositor failed", NULL, MB_OK);
-		LUA->PushNumber(-1);
-		return 1;
+		MessageBoxA(NULL, "VRCompositor failed", "VRMod Error", MB_OK);
+		return 0;
 	}
-
-	HookDirectX();
-
-	g_pSystem->GetRecommendedRenderTargetSize(&g_recommendedWidth, &g_recommendedHeight);
 
 	vr::HmdMatrix44_t proj = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
 	float xscale = proj.m[0][0];
@@ -243,13 +160,15 @@ LUA_FUNCTION(VRMOD_Init) {
 	g_horizontalOffset = g_calculatedHorizontalOffset;
 	g_verticalOffset = g_calculatedVerticalOffset;
 
-	LUA->PushNumber(0);
+	LUA->PushBool(true);
 	return 1;
 }
 
+
+
 //*************************************************************************
 //	Lua function: VRMOD_SetActionManifest(fileName)
-//	Returns: -1 on failure
+//	Returns: true on success
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetActionManifest) {
 	const char * fileName = LUA->CheckString(1);
@@ -261,17 +180,15 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 
 	g_pInput = vr::VRInput();
 	if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
-		MessageBoxA(NULL, "SetActionManifestPath", NULL, MB_OK);
-		LUA->PushNumber(-1);
-		return 1;
+		MessageBoxA(NULL, "SetActionManifestPath", "VRMod Error", MB_OK);
+		return 0;
 	}
 
 	FILE * file = NULL;
 	fopen_s(&file, path, "r");
 	if (file == NULL) {
-		MessageBoxA(NULL, "failed to open action manifest", NULL, MB_OK);
-		LUA->PushNumber(-1);
-		return 1;
+		MessageBoxA(NULL, "failed to open action manifest", "VRMod Error", MB_OK);
+		return 0;
 	}
 
 	char word[256];
@@ -293,7 +210,8 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 
 	fclose(file);
 
-	return 0;
+	LUA->PushBool(true);
+	return 1;
 }
 
 //*************************************************************************
@@ -328,26 +246,50 @@ LUA_FUNCTION(VRMOD_SetActiveActionSets) {
 }
 
 //*************************************************************************
-//	Lua function: VRMOD_Shutdown()
+//	Lua function: VRMOD_GetViewParameters()
+//	Returns: table
 //*************************************************************************
-LUA_FUNCTION(VRMOD_Shutdown) {
-	vr::VR_Shutdown();
-	g_pSystem = NULL;
-	g_d3d9Device->Release();
-	g_d3d11Device->Release();
-	g_d3d11Context->Release();
-	g_d3d11Texture = NULL;
-	g_sharedTexture = NULL;
-	g_actionCount = 0;
-	g_actionSetCount = 0;
-	g_activeActionSetCount = 0;
-	return 0;
+LUA_FUNCTION(VRMOD_GetViewParameters) {
+	LUA->CreateTable();
+
+	LUA->PushNumber(g_horizontalFOV);
+	LUA->SetField(-2, "horizontalFOV");
+
+	LUA->PushNumber(g_aspectRatio);
+	LUA->SetField(-2, "aspectRatio");
+
+	uint32_t recommendedWidth = 0;
+	uint32_t recommendedHeight = 0;
+	g_pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
+
+	LUA->PushNumber(recommendedWidth);
+	LUA->SetField(-2, "recommendedWidth");
+
+	LUA->PushNumber(recommendedHeight);
+	LUA->SetField(-2, "recommendedHeight");
+
+	vr::HmdMatrix34_t eyeToHeadLeft = g_pSystem->GetEyeToHeadTransform(vr::Eye_Left);
+	vr::HmdMatrix34_t eyeToHeadRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right);
+	Vector eyeToHeadTransformPos;
+	eyeToHeadTransformPos.x = eyeToHeadLeft.m[0][3];
+	eyeToHeadTransformPos.y = eyeToHeadLeft.m[1][3];
+	eyeToHeadTransformPos.z = eyeToHeadLeft.m[2][3];
+	LUA->PushVector(eyeToHeadTransformPos);
+	LUA->SetField(-2, "eyeToHeadTransformPosLeft");
+
+	eyeToHeadTransformPos.x = eyeToHeadRight.m[0][3];
+	eyeToHeadTransformPos.y = eyeToHeadRight.m[1][3];
+	eyeToHeadTransformPos.z = eyeToHeadRight.m[2][3];
+	LUA->PushVector(eyeToHeadTransformPos);
+	LUA->SetField(-2, "eyeToHeadTransformPosRight");
+
+	return 1;
 }
 
 //*************************************************************************
-//	Lua function: VRMOD_UpdatePoses()
+//	Lua function: VRMOD_UpdatePosesAndActions()
 //*************************************************************************
-LUA_FUNCTION(VRMOD_UpdatePoses) {
+LUA_FUNCTION(VRMOD_UpdatePosesAndActions) {
 	vr::VRCompositor()->WaitGetPoses(g_poses, vr::k_unMaxTrackedDeviceCount, NULL, 0);
 	g_pInput->UpdateActionState(g_activeActionSets, sizeof(vr::VRActiveActionSet_t), g_activeActionSetCount);
 	return 0;
@@ -355,7 +297,7 @@ LUA_FUNCTION(VRMOD_UpdatePoses) {
 
 //*************************************************************************
 //	Lua function: VRMOD_GetPoses()
-//	Returns: table of pose data
+//	Returns: table
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetPoses) {
 	vr::InputPoseActionData_t poseActionData;
@@ -363,7 +305,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 	char poseName[64];
 
 	LUA->CreateTable();
-	
+
 	for (int i = -1; i < g_actionCount; i++) {
 		//select a pose
 		poseActionData.pose.bPoseIsValid = 0;
@@ -372,7 +314,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 			pose = g_poses[0];
 			memcpy(poseName, "hmd", 4);
 		}
-		else if (strcmp(g_actions[i].type,"pose") == 0) {
+		else if (strcmp(g_actions[i].type, "pose") == 0) {
 			g_pInput->GetPoseActionData(g_actions[i].handle, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
 			pose = poseActionData.pose;
 			strcpy_s(poseName, 64, g_actions[i].name);
@@ -400,7 +342,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 			angvel.x = -pose.vAngularVelocity.v[2] * (180.0 / 3.141592654);
 			angvel.y = -pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
 			angvel.z = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
-			
+
 			//push a table for the pose
 			LUA->CreateTable();
 
@@ -419,16 +361,14 @@ LUA_FUNCTION(VRMOD_GetPoses) {
 			LUA->SetField(-2, poseName);
 
 		}
-
 	}
 
 	return 1;
 }
 
-
 //*************************************************************************
 //	Lua function: VRMOD_GetActions()
-//	Returns: table of action data
+//	Returns: table
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetActions) {
 	vr::InputDigitalActionData_t digitalActionData;
@@ -461,7 +401,7 @@ LUA_FUNCTION(VRMOD_GetActions) {
 			LUA->CreateTable();
 			LUA->CreateTable();
 			for (int j = 0; j < 5; j++) {
-				LUA->PushNumber(j+1);
+				LUA->PushNumber(j + 1);
 				LUA->PushNumber(skeletalSummaryData.flFingerCurl[j]);
 				LUA->SetTable(-3);
 			}
@@ -471,6 +411,116 @@ LUA_FUNCTION(VRMOD_GetActions) {
 	}
 
 	return 1;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_ShareTextureBegin()
+//*************************************************************************
+LUA_FUNCTION(VRMOD_ShareTextureBegin) {
+	HANDLE thread = CreateThread(NULL, 0, FindCreateTexture, 0, 0, NULL);
+
+	while (g_CreateTextureAddr == NULL)
+		Sleep(0);
+
+	g_CreateTextureOriginal = (CreateTexture)g_CreateTextureAddr;
+
+	if (MH_Initialize() != MH_OK) {
+		MessageBoxA(NULL, "MH_Initialize", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	if (MH_CreateHook((DWORD_PTR*)g_CreateTextureAddr, &CreateTextureHook, reinterpret_cast<void**>(&g_CreateTextureOriginal)) != MH_OK) {
+		MessageBoxA(NULL, "MH_CreateHook", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	if (MH_EnableHook((DWORD_PTR*)g_CreateTextureAddr) != MH_OK) {
+		MessageBoxA(NULL, "MH_EnableHook", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	return 0;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_ShareTextureFinish()
+//*************************************************************************
+LUA_FUNCTION(VRMOD_ShareTextureFinish) {
+	while (g_sharedTexture == NULL)
+		Sleep(0);
+
+	if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &g_d3d11Device, NULL, &g_d3d11Context) != S_OK) {
+		MessageBoxA(NULL, "D3D11CreateDevice", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	ID3D11Resource* res;
+	if (FAILED(g_d3d11Device->OpenSharedResource(g_sharedTexture, __uuidof(ID3D11Resource), (void**)&res))) {
+		MessageBoxA(NULL, "OpenSharedResource", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&g_d3d11Texture))) {
+		MessageBoxA(NULL, "QueryInterface", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	MH_DisableHook((DWORD_PTR*)g_CreateTextureAddr);
+	MH_RemoveHook((DWORD_PTR*)g_CreateTextureAddr);
+	if (MH_Uninitialize() != MH_OK)
+	{
+		MessageBoxA(NULL, "MH_Uninitialize", "VRMod Error", MB_OK);
+		return 0;
+	}
+
+	return 0;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_SubmitSharedTexture()
+//*************************************************************************
+LUA_FUNCTION(VRMOD_SubmitSharedTexture) {
+	if (g_d3d11Texture == NULL)
+		return 0;
+
+	vr::Texture_t vrTexture = { g_d3d11Texture, vr::TextureType_DirectX, vr::ColorSpace_Auto };
+
+	vr::VRTextureBounds_t textureBounds;
+
+	//submit Left eye
+	textureBounds.uMin = 0.0f - g_horizontalOffset * 0.25f;
+	textureBounds.uMax = 0.5f - g_horizontalOffset * 0.25f;
+	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
+	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
+
+	vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &vrTexture, &textureBounds);
+
+	//submit Right eye
+	textureBounds.uMin = 0.5f + g_horizontalOffset * 0.25f;
+	textureBounds.uMax = 1.0f + g_horizontalOffset * 0.25f;
+	textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
+	textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
+
+	vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &vrTexture, &textureBounds);
+
+	return 0;
+}
+
+//*************************************************************************
+//	Lua function: VRMOD_Shutdown()
+//*************************************************************************
+LUA_FUNCTION(VRMOD_Shutdown) {
+	vr::VR_Shutdown();
+	g_pSystem = NULL;
+	g_d3d11Device->Release();
+	g_d3d11Context->Release();
+	g_d3d11Texture = NULL;
+	g_sharedTexture = NULL;
+	g_CreateTextureAddr = NULL;
+	g_actionCount = 0;
+	g_actionSetCount = 0;
+	g_activeActionSetCount = 0;
+	return 0;
 }
 
 //*************************************************************************
@@ -504,59 +554,20 @@ LUA_FUNCTION(VRMOD_SetDisplayOffset) {
 }
 
 //*************************************************************************
-//	Lua function: VRMOD_GetFOV()
-//	Returns: horizontal fov, aspect ratio
-//*************************************************************************
-LUA_FUNCTION(VRMOD_GetFOV) {
-	LUA->PushNumber(g_horizontalFOV);
-	LUA->PushNumber(g_aspectRatio);
-	return 2;
-}
-
-//*************************************************************************
-//	Lua function: VRMOD_GetRecommendedResolution()
-//	Returns: width, height
-//*************************************************************************
-LUA_FUNCTION(VRMOD_GetRecommendedResolution) {
-	LUA->PushNumber(g_recommendedWidth*2);
-	LUA->PushNumber(g_recommendedHeight);
-	return 2;
-}
-
-//*************************************************************************
-//	Lua function: VRMOD_GetIPD()
-//	Returns: ipd, Z transform
-//*************************************************************************
-LUA_FUNCTION(VRMOD_GetIPD) {
-	vr::HmdMatrix34_t eyeToHeadRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right);
-	LUA->PushNumber(eyeToHeadRight.m[0][3] * 2.0f);
-	LUA->PushNumber(eyeToHeadRight.m[2][3]);
-	return 2;
-}
-
-//*************************************************************************
-//	Lua function: VRMOD_HMDPresent()
-//	Returns: true if a HMD is present
-//*************************************************************************
-LUA_FUNCTION(VRMOD_IsHMDPresent) {
-	LUA->PushBool(vr::VR_IsHmdPresent());
-	return 1;
-}
-
-//*************************************************************************
-//	Lua function: VRMOD_GetVersion()
-//	Returns: DLL version
-//*************************************************************************
-LUA_FUNCTION(VRMOD_GetVersion) {
-	LUA->PushNumber(9);
-	return 1;
-}
-
-//*************************************************************************
 //
 //*************************************************************************
 GMOD_MODULE_OPEN()
 {
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_GetVersion");
+	LUA->PushCFunction(VRMOD_GetVersion);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_IsHMDPresent");
+	LUA->PushCFunction(VRMOD_IsHMDPresent);
+	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_Init");
@@ -574,13 +585,13 @@ GMOD_MODULE_OPEN()
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_Shutdown");
-	LUA->PushCFunction(VRMOD_Shutdown);
+	LUA->PushString("VRMOD_GetViewParameters");
+	LUA->PushCFunction(VRMOD_GetViewParameters);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_UpdatePoses");
-	LUA->PushCFunction(VRMOD_UpdatePoses);
+	LUA->PushString("VRMOD_UpdatePosesAndActions");
+	LUA->PushCFunction(VRMOD_UpdatePosesAndActions);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
@@ -594,43 +605,33 @@ GMOD_MODULE_OPEN()
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_ShareTextureBegin");
+	LUA->PushCFunction(VRMOD_ShareTextureBegin);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_ShareTextureFinish");
+	LUA->PushCFunction(VRMOD_ShareTextureFinish);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_SubmitSharedTexture");
+	LUA->PushCFunction(VRMOD_SubmitSharedTexture);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+	LUA->PushString("VRMOD_Shutdown");
+	LUA->PushCFunction(VRMOD_Shutdown);
+	LUA->SetTable(-3);
+
+	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_TriggerHaptic");
 	LUA->PushCFunction(VRMOD_TriggerHaptic);
 	LUA->SetTable(-3);
 
 	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_MirrorFrame");
-	LUA->PushCFunction(VRMOD_MirrorFrame);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
 	LUA->PushString("VRMOD_SetDisplayOffset");
 	LUA->PushCFunction(VRMOD_SetDisplayOffset);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetFOV");
-	LUA->PushCFunction(VRMOD_GetFOV);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetRecommendedResolution");
-	LUA->PushCFunction(VRMOD_GetRecommendedResolution);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetIPD");
-	LUA->PushCFunction(VRMOD_GetIPD);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_IsHMDPresent");
-	LUA->PushCFunction(VRMOD_IsHMDPresent);
-	LUA->SetTable(-3);
-
-	LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-	LUA->PushString("VRMOD_GetVersion");
-	LUA->PushCFunction(VRMOD_GetVersion);
 	LUA->SetTable(-3);
 
 	return 0;
