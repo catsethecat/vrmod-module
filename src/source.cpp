@@ -37,8 +37,7 @@ int                     g_actionCount = 0;
 //directx
 typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
 CreateTexture           g_CreateTextureOriginal = NULL;
-ID3D11DeviceContext*    g_d3d11Context;
-ID3D11Device*           g_d3d11Device;
+ID3D11Device*           g_d3d11Device = NULL;
 ID3D11Texture2D*        g_d3d11Texture = NULL;
 HANDLE                  g_sharedTexture = NULL;
 DWORD_PTR               g_CreateTextureAddr = NULL;
@@ -69,14 +68,13 @@ HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UI
 DWORD WINAPI FindCreateTexture(LPVOID lParam) {
     IDirect3D9* dx = Direct3DCreate9(D3D_SDK_VERSION);
     if (dx == NULL) {
-        MessageBoxA(NULL, "Direct3DCreate9", "VRMod Error", MB_OK);
-        return 0;
+        return 1;
     }
 
-    HWND window = CreateWindowA("BUTTON", "Hooking...", WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, NULL, NULL, GetModuleHandle(NULL), NULL);
+    HWND window = CreateWindowA("BUTTON", " ", WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, NULL, NULL, GetModuleHandle(NULL), NULL);
     if (window == NULL) {
-        MessageBoxA(NULL, "CreateWindow", "VRMod Error", MB_OK);
-        return 0;
+        dx->Release();
+        return 2;
     }
 
     IDirect3DDevice9* d3d9Device = NULL;
@@ -88,9 +86,11 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
     params.hDeviceWindow = window;
     params.BackBufferFormat = D3DFMT_UNKNOWN;
 
+    //calling CreateDevice on the main thread seems to start causing random lua errors
     if (dx->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &d3d9Device) != D3D_OK) {
-        MessageBoxA(NULL, "CreateDevice", "VRMod Error", MB_OK);
-        return 0;
+        dx->Release();
+        DestroyWindow(window);
+        return 3;
     }
 
     g_CreateTextureAddr = ((DWORD_PTR*)(((DWORD_PTR*)d3d9Device)[0]))[23];
@@ -104,16 +104,16 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 
 //*************************************************************************
 //    Lua function: VRMOD_GetVersion()
-//    Returns: DLL version
+//    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(11);
+    LUA->PushNumber(12);
     return 1;
 }
 
 //*************************************************************************
-//    Lua function: VRMOD_HMDPresent()
-//    Returns: true if a HMD is present
+//    Lua function: VRMOD_IsHMDPresent()
+//    Returns: boolean
 //*************************************************************************
 LUA_FUNCTION(VRMOD_IsHMDPresent) {
     LUA->PushBool(vr::VR_IsHmdPresent());
@@ -122,20 +122,17 @@ LUA_FUNCTION(VRMOD_IsHMDPresent) {
 
 //*************************************************************************
 //    Lua function: VRMOD_Init()
-//    Returns: true on success
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Init) {
     vr::HmdError error = vr::VRInitError_None;
 
     g_pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
     if (error != vr::VRInitError_None) {
-        MessageBoxA(NULL, "VR_Init failed", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("VR_Init failed");
     }
 
     if (!vr::VRCompositor()) {
-        MessageBoxA(NULL, "VRCompositor failed", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("VRCompositor failed");
     }
 
     vr::HmdMatrix44_t proj = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
@@ -157,13 +154,11 @@ LUA_FUNCTION(VRMOD_Init) {
     g_horizontalOffset = g_calculatedHorizontalOffset;
     g_verticalOffset = g_calculatedVerticalOffset;
 
-    LUA->PushBool(true);
-    return 1;
+    return 0;
 }
 
 //*************************************************************************
 //    Lua function: VRMOD_SetActionManifest(fileName)
-//    Returns: true on success
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetActionManifest) {
     const char * fileName = LUA->CheckString(1);
@@ -175,15 +170,13 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 
     g_pInput = vr::VRInput();
     if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
-        MessageBoxA(NULL, "SetActionManifestPath", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("SetActionManifestPath failed");
     }
 
     FILE * file = NULL;
     fopen_s(&file, path, "r");
     if (file == NULL) {
-        MessageBoxA(NULL, "failed to open action manifest", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("failed to open action manifest");
     }
 
     char word[256];
@@ -205,8 +198,7 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 
     fclose(file);
 
-    LUA->PushBool(true);
-    return 1;
+    return 0;
 }
 
 //*************************************************************************
@@ -216,7 +208,7 @@ LUA_FUNCTION(VRMOD_SetActiveActionSets) {
     g_activeActionSetCount = 0;
     for (int i = 0; i < 16; i++) {
         if (LUA->GetType(i + 1) == GarrysMod::Lua::Type::STRING) {
-            const char * actionSetName = LUA->CheckString(i+1);
+            const char * actionSetName = LUA->CheckString(i + 1);
             int actionSetIndex = -1;
             for (int j = 0; j < g_actionSetCount; j++) {
                 if (strcmp(actionSetName, g_actionSets[j].name) == 0) {
@@ -226,7 +218,7 @@ LUA_FUNCTION(VRMOD_SetActiveActionSets) {
             }
             if (actionSetIndex == -1) {
                 g_pInput->GetActionSetHandle(actionSetName, &g_actionSets[g_actionSetCount].handle);
-                memcpy(g_actionSets[g_actionSetCount].name, actionSetName,strlen(actionSetName));
+                memcpy(g_actionSets[g_actionSetCount].name, actionSetName, strlen(actionSetName));
                 actionSetIndex = g_actionSetCount;
                 g_actionSetCount++;
             }
@@ -319,7 +311,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
         }
         //
         if (pose.bPoseIsValid) {
-            //do some conversion
+
             vr::HmdMatrix34_t mat = pose.mDeviceToAbsoluteTracking;
             Vector pos;
             Vector vel;
@@ -338,7 +330,6 @@ LUA_FUNCTION(VRMOD_GetPoses) {
             angvel.y = -pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
             angvel.z = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
 
-            //push a table for the pose
             LUA->CreateTable();
 
             LUA->PushVector(pos);
@@ -414,41 +405,49 @@ LUA_FUNCTION(VRMOD_GetActions) {
 LUA_FUNCTION(VRMOD_ShareTextureBegin) {
     HWND activeWindow = GetActiveWindow();
     if (activeWindow == NULL) {
-        MessageBoxA(NULL, "GetActiveWindow", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("GetActiveWindow failed");
     }
 
     //hiding and restoring the game window is a workaround to d3d9 CreateDevice
     //failing on the second thread if the game is fullscreen
     ShowWindow(activeWindow, SW_HIDE);
-
     HANDLE thread = CreateThread(NULL, 0, FindCreateTexture, 0, 0, NULL);
-
     WaitForSingleObject(thread, 1000);
-    CloseHandle(thread);
-
     ShowWindow(activeWindow, SW_RESTORE);
+    DWORD exitCode = 4;
+    GetExitCodeThread(thread, &exitCode);
+    CloseHandle(thread);
+    if (exitCode != 0) {
+        if (exitCode == 1) {
+            LUA->ThrowError("Direct3DCreate9 failed");
+        }
+        else if (exitCode == 2) {
+            LUA->ThrowError("CreateWindowA failed");
+        }
+        else if(exitCode == 3){
+            LUA->ThrowError("CreateDevice failed");
+        }
+        else {
+            LUA->ThrowError("GetExitCodeThread failed");
+        }
+    }
 
     if (g_CreateTextureAddr == NULL) {
-        MessageBoxA(NULL, "CreateTextureAddr is NULL", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("g_CreateTextureAddr is null");
     }
 
     g_CreateTextureOriginal = (CreateTexture)g_CreateTextureAddr;
 
     if (MH_Initialize() != MH_OK) {
-        MessageBoxA(NULL, "MH_Initialize", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("MH_Initialize failed");
     }
 
     if (MH_CreateHook((DWORD_PTR*)g_CreateTextureAddr, &CreateTextureHook, reinterpret_cast<void**>(&g_CreateTextureOriginal)) != MH_OK) {
-        MessageBoxA(NULL, "MH_CreateHook", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("MH_CreateHook failed");
     }
 
     if (MH_EnableHook((DWORD_PTR*)g_CreateTextureAddr) != MH_OK) {
-        MessageBoxA(NULL, "MH_EnableHook", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("MH_EnableHook failed");
     }
 
     return 0;
@@ -459,31 +458,26 @@ LUA_FUNCTION(VRMOD_ShareTextureBegin) {
 //*************************************************************************
 LUA_FUNCTION(VRMOD_ShareTextureFinish) {
     if (g_sharedTexture == NULL) {
-        MessageBoxA(NULL, "ShareTextureFinish: sharedTexture is NULL", "VRMod Error", MB_OK);
+        LUA->ThrowError("g_sharedTexture is null");
     }
 
-    if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &g_d3d11Device, NULL, &g_d3d11Context) != S_OK) {
-        MessageBoxA(NULL, "D3D11CreateDevice", "VRMod Error", MB_OK);
-        return 0;
+    if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &g_d3d11Device, NULL, NULL) != S_OK) {
+        LUA->ThrowError("D3D11CreateDevice failed");
     }
 
     ID3D11Resource* res;
     if (FAILED(g_d3d11Device->OpenSharedResource(g_sharedTexture, __uuidof(ID3D11Resource), (void**)&res))) {
-        MessageBoxA(NULL, "OpenSharedResource", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("OpenSharedResource failed");
     }
 
     if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&g_d3d11Texture))) {
-        MessageBoxA(NULL, "QueryInterface", "VRMod Error", MB_OK);
-        return 0;
+        LUA->ThrowError("QueryInterface failed");
     }
 
     MH_DisableHook((DWORD_PTR*)g_CreateTextureAddr);
     MH_RemoveHook((DWORD_PTR*)g_CreateTextureAddr);
-    if (MH_Uninitialize() != MH_OK)
-    {
-        MessageBoxA(NULL, "MH_Uninitialize", "VRMod Error", MB_OK);
-        return 0;
+    if (MH_Uninitialize() != MH_OK){
+        LUA->ThrowError("MH_Uninitialize failed");
     }
 
     return 0;
@@ -523,10 +517,14 @@ LUA_FUNCTION(VRMOD_SubmitSharedTexture) {
 //    Lua function: VRMOD_Shutdown()
 //*************************************************************************
 LUA_FUNCTION(VRMOD_Shutdown) {
-    vr::VR_Shutdown();
-    g_pSystem = NULL;
-    g_d3d11Device->Release();
-    g_d3d11Context->Release();
+    if (g_pSystem != NULL) {
+        vr::VR_Shutdown();
+        g_pSystem = NULL;
+    }
+    if (g_d3d11Device != NULL) {
+        g_d3d11Device->Release();
+        g_d3d11Device = NULL;
+    }
     g_d3d11Texture = NULL;
     g_sharedTexture = NULL;
     g_CreateTextureAddr = NULL;
