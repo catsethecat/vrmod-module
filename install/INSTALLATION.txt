@@ -1,3 +1,7 @@
-Go to the folder where you have gmod and other steam games installed (such as C:\Program Files (x86)\Steam\steamapps\common)
-drag the GarrysMod folder that is next to this INSTALLATION.txt into that "common" folder.
-It should merge with the existing GarrysMod folder and the files will automatically go into the right places.
+Right click Garry's Mod in your Steam library and press "Properties".
+In the Properties window, open the "Local files" tab and press "Browse local files".
+This should open your GarrysMod folder which is located in .../common/GarrysMod.
+Go back one folder into that "common" folder.
+
+Drag the GarrysMod folder that is next to this INSTALLATION.txt into that "common" folder.
+(Not onto the GarrysMod folder in common)
