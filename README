@@ -1,19 +1,125 @@
+This module adds some Lua functions to provide basic OpenVR support to Garry's Mod.
+
 To install or update the module, open the "install" folder and read "INSTALLATION.txt"
 
---
+#######################################################################################
+# Lua functions
+#######################################################################################
 
-This is the module used by the VRMod addon for Garry's Mod (https://steamcommunity.com/sharedfiles/filedetails/?id=1678408548).
-It adds some basic lua functions for interfacing with OpenVR, and a way to mirror a texture from the game to the VR compositor.
+Function: number VRMOD_GetVersion()
+Description: Returns the module version
 
-If you want to compile the module yourself using visual studio:
--add the source files to your project and make sure the project is configured to produce a .dll
--link openvr_api.lib and get the OpenVR headers, both available at https://github.com/ValveSoftware/openvr
--get the gmod lua headers https://github.com/Facepunch/gmod-module-base/tree/development
--get MinHook (header and lib, which you can build yourself) https://github.com/TsudaKageyu/minhook
+Function: boolean VRMOD_IsHMDPresent()
+Description: Returns true if a VR headset is connected
 
-SPECIAL THANKS TO:
+Function: VRMOD_Init()
+Description: Initializes OpenVR.
+This must be called successfully before using the functions listed below.
+You must call VRMOD_Shutdown() before calling it again.
+
+Function: VRMOD_SetActionManifest( string fileName )
+Description: Sets the specified file as the action manifest.
+Path is relative to garrysmod/data/.
+This should be called only once between init/shutdown.
+
+Function: VRMOD_SetActiveActionSets( string actionSetName, ... )
+Description: Makes the given action sets currently active.
+
+Function: table VRMOD_GetViewParameters()
+Description: Returns the following table of information that can be used to set up
+proper 3D rendering
+{
+  number horizontalFOV,
+  number aspectRatio,
+  number recommendedWidth,
+  number recommendedHeight,
+  vector eyeToHeadTransformPosLeft,
+  vector eyeToHeadTransformPosRight,
+}
+
+Function: VRMOD_ShareTextureBegin()
+Description: After calling this function, the next texture that is created in the game
+will be shared with the module. You should create a new texture (using GetRenderTarget
+for example) immediately after calling this function. This should be called only once
+between init/shutdown.
+
+Function: VRMOD_ShareTextureFinish()
+Description: This must be called after creating a texture to finish the texture sharing
+process. This should be called only once between init/shutdown.
+
+Function: VRMOD_UpdatePosesAndActions()
+Description: This should be called once per frame to update the poses and actions
+which you can then use to render with.
+This function is also responsible for syncing the fps to the headsets refresh rate.
+
+Function: table VRMOD_GetPoses()
+Description: Returns a table of poses. The hmd pose is automatically included, the
+rest are defined by the action manifest.
+{
+  hmd = {
+    vector pos,
+    vector vel,
+    angle ang,
+    angle angvel,
+  },
+  ...
+}
+
+Function: table VRMOD_GetActions()
+Description: Returns a table of actions (defined by the action manifest) and their states.
+It could look something like this:
+{
+  boolean boolean_example,
+  number vector1_example,
+  vector2_example = {
+    number x,
+    number y,
+  }
+  skeleton_example {
+    table fingerCurls = {
+      number 1
+      number 2
+      number 3
+      number 4
+      number 5
+    }
+  }
+}
+
+Function: VRMOD_SubmitSharedTexture()
+Description: Submits the shared texture to the VR Compositor. This should be called
+once per frame, after you have rendered to / updated the shared texture.
+The left half of the texture is used for the left eye, and the right half is used
+for the right eye.
+
+Function: VRMOD_Shutdown()
+Description: Shuts down OpenVR and performs some clean up.
+You must not call any functions that require it to be active until you call VRMOD_Init()
+again.
+
+Function: VRMOD_TriggerHaptic( string actionName, number delay, number duration,
+  number frequency, number amplitude )
+Description: Triggers the specified vibration action (defined by the action manifest)
+using the given parameters.
+
+Function: VRMOD_SetDisplayOffset(horizontal, vertical)
+Description: Can be used to move the left/right eye views around. Can be called without
+arguments to restore the automatically calculated display offsets. You shouldn't use
+this function unless you're doing experiments and know what you're doing.
+
+#######################################################################################
+# Compiling
+#######################################################################################
+
+If you want to compile the module yourself you will need the following:
+-OpenVR headers and lib (https://github.com/ValveSoftware/openvr)
+-GMod Lua headers (https://github.com/Facepunch/gmod-module-base/tree/development)
+-MinHook headers and lib (https://github.com/TsudaKageyu/minhook)
+
+#######################################################################################
+# Credits
+#######################################################################################
 
 UselessGhost (https://steamcommunity.com/id/UselessGhost)
-who shared tips and their proof of concept gmod vr module source on the VRMod Workshop Discussions,
-where the current directx hooking and texture sharing code is borrowed from.
-https://bitbucket.org/uselessghost/gmcl_openvr
+For sharing tips and the directx hooking and texture sharing code which is based on
+their project (https://bitbucket.org/uselessghost/gmcl_openvr)
