@@ -43,13 +43,14 @@ HANDLE                  g_sharedTexture = NULL;
 DWORD_PTR               g_CreateTextureAddr = NULL;
 
 //other
-float                   g_horizontalFOV = 0;
-float                   g_verticalFOV = 0;
-float                   g_aspectRatio = 0;
-float                   g_horizontalOffset = 0;
-float                   g_verticalOffset = 0;
-float                   g_calculatedHorizontalOffset = 0;
-float                   g_calculatedVerticalOffset = 0;
+float                   g_horizontalFOVLeft = 0;
+float                   g_horizontalFOVRight = 0;
+float                   g_aspectRatioLeft = 0;
+float                   g_aspectRatioRight = 0;
+float                   g_horizontalOffsetLeft = 0;
+float                   g_horizontalOffsetRight = 0;
+float                   g_verticalOffsetLeft = 0;
+float                   g_verticalOffsetRight = 0;
 
 //*************************************************************************
 //  CreateTexture hook
@@ -107,7 +108,7 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 //    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(12);
+    LUA->PushNumber(13);
     return 1;
 }
 
@@ -146,13 +147,27 @@ LUA_FUNCTION(VRMOD_Init) {
     float tan_ny = fabsf((-1.0f - yoffset) / yscale);
     float w = tan_px + tan_nx;
     float h = tan_py + tan_ny;
-    g_horizontalFOV = atan(w / 2.0f) * 180 / 3.141592654 * 2;
-    g_verticalFOV = atan(h / 2.0f) * 180 / 3.141592654 * 2;
-    g_aspectRatio = w / h;
-    g_calculatedHorizontalOffset = -xoffset;
-    g_calculatedVerticalOffset = -yoffset;
-    g_horizontalOffset = g_calculatedHorizontalOffset;
-    g_verticalOffset = g_calculatedVerticalOffset;
+    g_horizontalFOVLeft = atan(w / 2.0f) * 180 / 3.141592654 * 2;
+    //g_verticalFOV = atan(h / 2.0f) * 180 / 3.141592654 * 2;
+    g_aspectRatioLeft = w / h;
+    g_horizontalOffsetLeft = xoffset;
+    g_verticalOffsetLeft = yoffset;
+
+    proj = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, 1, 10);
+    xscale = proj.m[0][0];
+    xoffset = proj.m[0][2];
+    yscale = proj.m[1][1];
+    yoffset = proj.m[1][2];
+    tan_px = fabsf((1.0f - xoffset) / xscale);
+    tan_nx = fabsf((-1.0f - xoffset) / xscale);
+    tan_py = fabsf((1.0f - yoffset) / yscale);
+    tan_ny = fabsf((-1.0f - yoffset) / yscale);
+    w = tan_px + tan_nx;
+    h = tan_py + tan_ny;
+    g_horizontalFOVRight = atan(w / 2.0f) * 180 / 3.141592654 * 2;
+    g_aspectRatioRight = w / h;
+    g_horizontalOffsetRight = xoffset;
+    g_verticalOffsetRight = yoffset;
 
     return 0;
 }
@@ -161,7 +176,7 @@ LUA_FUNCTION(VRMOD_Init) {
 //    Lua function: VRMOD_SetActionManifest(fileName)
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetActionManifest) {
-    const char * fileName = LUA->CheckString(1);
+    const char* fileName = LUA->CheckString(1);
 
     char currentDir[256];
     GetCurrentDirectory(256, currentDir);
@@ -173,7 +188,7 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
         LUA->ThrowError("SetActionManifestPath failed");
     }
 
-    FILE * file = NULL;
+    FILE* file = NULL;
     fopen_s(&file, path, "r");
     if (file == NULL) {
         LUA->ThrowError("failed to open action manifest");
@@ -208,7 +223,7 @@ LUA_FUNCTION(VRMOD_SetActiveActionSets) {
     g_activeActionSetCount = 0;
     for (int i = 0; i < 16; i++) {
         if (LUA->GetType(i + 1) == GarrysMod::Lua::Type::STRING) {
-            const char * actionSetName = LUA->CheckString(i + 1);
+            const char* actionSetName = LUA->CheckString(i + 1);
             int actionSetIndex = -1;
             for (int j = 0; j < g_actionSetCount; j++) {
                 if (strcmp(actionSetName, g_actionSets[j].name) == 0) {
@@ -239,11 +254,17 @@ LUA_FUNCTION(VRMOD_SetActiveActionSets) {
 LUA_FUNCTION(VRMOD_GetViewParameters) {
     LUA->CreateTable();
 
-    LUA->PushNumber(g_horizontalFOV);
-    LUA->SetField(-2, "horizontalFOV");
+    LUA->PushNumber(g_horizontalFOVLeft);
+    LUA->SetField(-2, "horizontalFOVLeft");
 
-    LUA->PushNumber(g_aspectRatio);
-    LUA->SetField(-2, "aspectRatio");
+    LUA->PushNumber(g_horizontalFOVRight);
+    LUA->SetField(-2, "horizontalFOVRight");
+
+    LUA->PushNumber(g_aspectRatioLeft);
+    LUA->SetField(-2, "aspectRatioLeft");
+
+    LUA->PushNumber(g_aspectRatioRight);
+    LUA->SetField(-2, "aspectRatioRight");
 
     uint32_t recommendedWidth = 0;
     uint32_t recommendedHeight = 0;
@@ -412,6 +433,9 @@ LUA_FUNCTION(VRMOD_ShareTextureBegin) {
     //failing on the second thread if the game is fullscreen
     ShowWindow(activeWindow, SW_HIDE);
     HANDLE thread = CreateThread(NULL, 0, FindCreateTexture, 0, 0, NULL);
+    if (thread == NULL) {
+        LUA->ThrowError("CreateThread failed");
+    }
     WaitForSingleObject(thread, 1000);
     ShowWindow(activeWindow, SW_RESTORE);
     DWORD exitCode = 4;
@@ -424,7 +448,7 @@ LUA_FUNCTION(VRMOD_ShareTextureBegin) {
         else if (exitCode == 2) {
             LUA->ThrowError("CreateWindowA failed");
         }
-        else if(exitCode == 3){
+        else if (exitCode == 3) {
             LUA->ThrowError("CreateDevice failed");
         }
         else {
@@ -476,7 +500,7 @@ LUA_FUNCTION(VRMOD_ShareTextureFinish) {
 
     MH_DisableHook((DWORD_PTR*)g_CreateTextureAddr);
     MH_RemoveHook((DWORD_PTR*)g_CreateTextureAddr);
-    if (MH_Uninitialize() != MH_OK){
+    if (MH_Uninitialize() != MH_OK) {
         LUA->ThrowError("MH_Uninitialize failed");
     }
 
@@ -495,18 +519,18 @@ LUA_FUNCTION(VRMOD_SubmitSharedTexture) {
     vr::VRTextureBounds_t textureBounds;
 
     //submit Left eye
-    textureBounds.uMin = 0.0f - g_horizontalOffset * 0.25f;
-    textureBounds.uMax = 0.5f - g_horizontalOffset * 0.25f;
-    textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
-    textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
+    textureBounds.uMin = 0.0f + g_horizontalOffsetLeft * 0.25f;
+    textureBounds.uMax = 0.5f + g_horizontalOffsetLeft * 0.25f;
+    textureBounds.vMin = 0.0f - g_verticalOffsetLeft * 0.5f;
+    textureBounds.vMax = 1.0f - g_verticalOffsetLeft * 0.5f;
 
     vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &vrTexture, &textureBounds);
 
     //submit Right eye
-    textureBounds.uMin = 0.5f + g_horizontalOffset * 0.25f;
-    textureBounds.uMax = 1.0f + g_horizontalOffset * 0.25f;
-    textureBounds.vMin = 0.0f + g_verticalOffset * 0.5f;
-    textureBounds.vMax = 1.0f + g_verticalOffset * 0.5f;
+    textureBounds.uMin = 0.5f + g_horizontalOffsetRight * 0.25f;
+    textureBounds.uMax = 1.0f + g_horizontalOffsetRight * 0.25f;
+    textureBounds.vMin = 0.0f - g_verticalOffsetRight * 0.5f;
+    textureBounds.vMax = 1.0f - g_verticalOffsetRight * 0.5f;
 
     vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &vrTexture, &textureBounds);
 
@@ -538,28 +562,13 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 //    Lua function: VRMOD_TriggerHaptic(actionName, delay, duration, frequency, amplitude)
 //*************************************************************************
 LUA_FUNCTION(VRMOD_TriggerHaptic) {
-    const char * actionName = LUA->CheckString(1);
+    const char* actionName = LUA->CheckString(1);
     unsigned int nameLen = strlen(actionName);
     for (int i = 0; i < g_actionCount; i++) {
         if (strlen(g_actions[i].name) == nameLen && memcmp(g_actions[i].name, actionName, nameLen) == 0) {
             g_pInput->TriggerHapticVibrationAction(g_actions[i].handle, LUA->CheckNumber(2), LUA->CheckNumber(3), LUA->CheckNumber(4), LUA->CheckNumber(5), vr::k_ulInvalidInputValueHandle);
             break;
         }
-    }
-    return 0;
-}
-
-//*************************************************************************
-//    Lua function: VRMOD_SetDisplayOffset(horizontal, vertical)
-//*************************************************************************
-LUA_FUNCTION(VRMOD_SetDisplayOffset) {
-    if (LUA->IsType(1, GarrysMod::Lua::Type::NUMBER) && LUA->IsType(2, GarrysMod::Lua::Type::NUMBER)) {
-        g_horizontalOffset = LUA->GetNumber(1);
-        g_verticalOffset = LUA->GetNumber(2);
-    }
-    else {
-        g_horizontalOffset = g_calculatedHorizontalOffset;
-        g_verticalOffset = g_calculatedVerticalOffset;
     }
     return 0;
 }
@@ -638,11 +647,6 @@ GMOD_MODULE_OPEN()
     LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
     LUA->PushString("VRMOD_TriggerHaptic");
     LUA->PushCFunction(VRMOD_TriggerHaptic);
-    LUA->SetTable(-3);
-
-    LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-    LUA->PushString("VRMOD_SetDisplayOffset");
-    LUA->PushCFunction(VRMOD_SetDisplayOffset);
     LUA->SetTable(-3);
 
     return 0;
