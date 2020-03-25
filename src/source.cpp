@@ -41,6 +41,7 @@ ID3D11Device*           g_d3d11Device = NULL;
 ID3D11Texture2D*        g_d3d11Texture = NULL;
 HANDLE                  g_sharedTexture = NULL;
 DWORD_PTR               g_CreateTextureAddr = NULL;
+IDirect3DDevice9*       g_d3d9Device = NULL;
 
 //other
 float                   g_horizontalFOVLeft = 0;
@@ -59,6 +60,7 @@ HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UI
     if (g_sharedTexture == NULL) {
         shared_handle = &g_sharedTexture;
         pool = D3DPOOL_DEFAULT;
+        g_d3d9Device = pDevice;
     }
     return g_CreateTextureOriginal(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
 };
@@ -108,7 +110,7 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 //    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(13);
+    LUA->PushNumber(14);
     return 1;
 }
 
@@ -514,6 +516,15 @@ LUA_FUNCTION(VRMOD_SubmitSharedTexture) {
     if (g_d3d11Texture == NULL)
         return 0;
 
+    IDirect3DQuery9* pEventQuery = nullptr;
+    g_d3d9Device->CreateQuery(D3DQUERYTYPE_EVENT, &pEventQuery);
+    if (pEventQuery != nullptr)
+    {
+        pEventQuery->Issue(D3DISSUE_END);
+        while (pEventQuery->GetData(nullptr, 0, D3DGETDATA_FLUSH) != S_OK);
+        pEventQuery->Release();
+    }
+
     vr::Texture_t vrTexture = { g_d3d11Texture, vr::TextureType_DirectX, vr::ColorSpace_Auto };
 
     vr::VRTextureBounds_t textureBounds;
@@ -555,6 +566,7 @@ LUA_FUNCTION(VRMOD_Shutdown) {
     g_actionCount = 0;
     g_actionSetCount = 0;
     g_activeActionSetCount = 0;
+    g_d3d9Device = NULL;
     return 0;
 }
 
