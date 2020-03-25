@@ -29,8 +29,10 @@ Function: table VRMOD_GetViewParameters()
 Description: Returns the following table of information that can be used to set up
 proper 3D rendering
 {
-  number horizontalFOV,
-  number aspectRatio,
+  number horizontalFOVLeft,
+  number horizontalFOVRight,
+  number aspectRatioLeft,
+  number aspectRatioRight,
   number recommendedWidth,
   number recommendedHeight,
   vector eyeToHeadTransformPosLeft,
@@ -101,11 +103,6 @@ Function: VRMOD_TriggerHaptic( string actionName, number delay, number duration,
   number frequency, number amplitude )
 Description: Triggers the specified vibration action (defined by the action manifest)
 using the given parameters.
-
-Function: VRMOD_SetDisplayOffset(horizontal, vertical)
-Description: Can be used to move the left/right eye views around. Can be called without
-arguments to restore the automatically calculated display offsets. You shouldn't use
-this function unless you're doing experiments and know what you're doing.
 
 #######################################################################################
 # Compiling
