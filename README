@@ -114,9 +114,12 @@ If you want to compile the module yourself you will need the following:
 -MinHook headers and lib (https://github.com/TsudaKageyu/minhook)
 
 #######################################################################################
-# Credits
+# Credits / Special Thanks
 #######################################################################################
 
-UselessGhost (https://steamcommunity.com/id/UselessGhost)
+-UselessGhost (https://steamcommunity.com/id/UselessGhost)
 For sharing tips and the directx hooking and texture sharing code which is based on
 their project (https://bitbucket.org/uselessghost/gmcl_openvr)
+-willox (https://github.com/willox)
+For updating gmod which has made VR work better, as well as providing solutions for
+some other issues
