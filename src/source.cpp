@@ -13,25 +13,31 @@
 //  Globals
 //*************************************************************************
 
+#define MAX_STR_LEN 256
+#define MAX_ACTIONS 64
+#define MAX_ACTIONSETS 16
+
 //openvr related
 typedef struct {
     vr::VRActionHandle_t handle;
-    char fullname[256];
-    char type[256];
+    char fullname[MAX_STR_LEN];
+    char type[MAX_STR_LEN];
     char* name;
 }action;
+
 typedef struct {
     vr::VRActionSetHandle_t handle;
-    char name[256];
+    char name[MAX_STR_LEN];
 }actionSet;
+
 vr::IVRSystem*          g_pSystem = NULL;
 vr::IVRInput*           g_pInput = NULL;
 vr::TrackedDevicePose_t g_poses[vr::k_unMaxTrackedDeviceCount];
-actionSet               g_actionSets[16];
+actionSet               g_actionSets[MAX_ACTIONSETS];
 int                     g_actionSetCount = 0;
-vr::VRActiveActionSet_t g_activeActionSets[16];
+vr::VRActiveActionSet_t g_activeActionSets[MAX_ACTIONSETS];
 int                     g_activeActionSetCount = 0;
-action                  g_actions[64];
+action                  g_actions[MAX_ACTIONS];
 int                     g_actionCount = 0;
 
 //directx
@@ -110,7 +116,7 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 //    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(14);
+    LUA->PushNumber(15);
     return 1;
 }
 
@@ -180,10 +186,10 @@ LUA_FUNCTION(VRMOD_Init) {
 LUA_FUNCTION(VRMOD_SetActionManifest) {
     const char* fileName = LUA->CheckString(1);
 
-    char currentDir[256];
-    GetCurrentDirectory(256, currentDir);
-    char path[256];
-    sprintf_s(path, 256, "%s\\garrysmod\\data\\%s", currentDir, fileName);
+    char currentDir[MAX_STR_LEN];
+    GetCurrentDirectory(MAX_STR_LEN, currentDir);
+    char path[MAX_STR_LEN];
+    sprintf_s(path, MAX_STR_LEN, "%s\\garrysmod\\data\\%s", currentDir, fileName);
 
     g_pInput = vr::VRInput();
     if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
@@ -196,12 +202,15 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
         LUA->ThrowError("failed to open action manifest");
     }
 
-    char word[256];
-    while (fscanf_s(file, "%*[^\"]\"%[^\"]\"", word, 256) == 1) {
+    memset(g_actions, 0, sizeof(g_actions));
+
+    char word[MAX_STR_LEN];
+    while (fscanf_s(file, "%*[^\"]\"%[^\"]\"", word, MAX_STR_LEN) == 1 && strcmp(word, "actions") != 0);
+    while (fscanf_s(file, "%[^\"]\"", word, MAX_STR_LEN) == 1) {
+        if (strchr(word, ']') != nullptr)
+            break;
         if (strcmp(word, "name") == 0) {
-            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].fullname, 256) != 1)
-                break;
-            if (fscanf_s(file, "%*[^\"]\"type\"%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].type, 256) != 1)
+            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].fullname, MAX_STR_LEN) != 1)
                 break;
             g_actions[g_actionCount].name = g_actions[g_actionCount].fullname;
             for (int i = 0; i < strlen(g_actions[g_actionCount].fullname); i++) {
@@ -209,7 +218,15 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
                     g_actions[g_actionCount].name = g_actions[g_actionCount].fullname + i + 1;
             }
             g_pInput->GetActionHandle(g_actions[g_actionCount].fullname, &(g_actions[g_actionCount].handle));
+        }
+        if (strcmp(word, "type") == 0) {
+            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].type, MAX_STR_LEN) != 1)
+                break;
+        }
+        if (g_actions[g_actionCount].fullname[0] && g_actions[g_actionCount].type[0]) {
             g_actionCount++;
+            if (g_actionCount == MAX_ACTIONS)
+                break;
         }
     }
 
@@ -223,7 +240,7 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
 //*************************************************************************
 LUA_FUNCTION(VRMOD_SetActiveActionSets) {
     g_activeActionSetCount = 0;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < MAX_ACTIONSETS; i++) {
         if (LUA->GetType(i + 1) == GarrysMod::Lua::Type::STRING) {
             const char* actionSetName = LUA->CheckString(i + 1);
             int actionSetIndex = -1;
@@ -312,7 +329,7 @@ LUA_FUNCTION(VRMOD_UpdatePosesAndActions) {
 LUA_FUNCTION(VRMOD_GetPoses) {
     vr::InputPoseActionData_t poseActionData;
     vr::TrackedDevicePose_t pose;
-    char poseName[64];
+    char poseName[MAX_STR_LEN];
 
     LUA->CreateTable();
 
@@ -327,7 +344,7 @@ LUA_FUNCTION(VRMOD_GetPoses) {
         else if (strcmp(g_actions[i].type, "pose") == 0) {
             g_pInput->GetPoseActionData(g_actions[i].handle, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
             pose = poseActionData.pose;
-            strcpy_s(poseName, 64, g_actions[i].name);
+            strcpy_s(poseName, MAX_STR_LEN, g_actions[i].name);
         }
         else {
             continue;
