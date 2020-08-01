@@ -116,7 +116,7 @@ DWORD WINAPI FindCreateTexture(LPVOID lParam) {
 //    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(15);
+    LUA->PushNumber(16);
     return 1;
 }
 
@@ -603,6 +603,25 @@ LUA_FUNCTION(VRMOD_TriggerHaptic) {
 }
 
 //*************************************************************************
+//    Lua function: VRMOD_GetTrackedDeviceNames()
+//    Returns: table
+//*************************************************************************
+LUA_FUNCTION(VRMOD_GetTrackedDeviceNames) {
+    LUA->CreateTable();
+    int tableIndex = 1;
+    char name[MAX_STR_LEN];
+    for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
+        if (g_pSystem->GetStringTrackedDeviceProperty(i, vr::Prop_ControllerType_String, name, MAX_STR_LEN) > 1) {
+            LUA->PushNumber(tableIndex);
+            LUA->PushString(name);
+            LUA->SetTable(-3);
+            tableIndex++;
+        }
+    }
+    return 1;
+}
+
+//*************************************************************************
 //
 //*************************************************************************
 GMOD_MODULE_OPEN()
@@ -676,6 +695,11 @@ GMOD_MODULE_OPEN()
     LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
     LUA->PushString("VRMOD_TriggerHaptic");
     LUA->PushCFunction(VRMOD_TriggerHaptic);
+    LUA->SetTable(-3);
+
+    LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
+    LUA->PushString("VRMOD_GetTrackedDeviceNames");
+    LUA->PushCFunction(VRMOD_GetTrackedDeviceNames);
     LUA->SetTable(-3);
 
     return 0;
