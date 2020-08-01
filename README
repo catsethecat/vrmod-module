@@ -13,9 +13,14 @@ Function: boolean VRMOD_IsHMDPresent()
 Description: Returns true if a VR headset is connected
 
 Function: VRMOD_Init()
-Description: Initializes OpenVR.
-This must be called successfully before using the functions listed below.
-You must call VRMOD_Shutdown() before calling it again.
+Description: Starts OpenVR and performs some initialization.
+This must be called successfully before using any of the functions listed below.
+You must call VRMOD_Shutdown() before calling this again.
+
+Function: VRMOD_Shutdown()
+Description: Shuts down OpenVR and performs some clean up.
+You must not call any of the functions listed below until you successfully run
+VRMOD_Init() again.
 
 Function: VRMOD_SetActionManifest( string fileName )
 Description: Sets the specified file as the action manifest.
@@ -94,15 +99,19 @@ once per frame, after you have rendered to / updated the shared texture.
 The left half of the texture is used for the left eye, and the right half is used
 for the right eye.
 
-Function: VRMOD_Shutdown()
-Description: Shuts down OpenVR and performs some clean up.
-You must not call any functions that require it to be active until you call VRMOD_Init()
-again.
-
 Function: VRMOD_TriggerHaptic( string actionName, number delay, number duration,
   number frequency, number amplitude )
 Description: Triggers the specified vibration action (defined by the action manifest)
 using the given parameters.
+
+Function: table VRMOD_GetTrackedDeviceNames()
+Description: returns a sequential numerical indexed table with names of all connected
+tracked devices. For example:
+{
+  1 = "indexhmd"
+  2 = "knuckles"
+  3 = "knuckles"
+}
 
 #######################################################################################
 # Compiling
