@@ -1,13 +1,10 @@
-#include "GarrysMod/Lua/Interface.h"
+#define WIN32_LEAN_AND_MEAN
+#include <gmod/Interface.h>
 #include <stdio.h>
 #include <Windows.h>
 #include <d3d9.h>
 #include <d3d11.h>
-#include <openvr.h>
-#include <MinHook.h>
-
-#pragma comment (lib, "d3d11.lib")
-#pragma comment (lib, "d3d9.lib")
+#include <openvr/openvr.h>
 
 //*************************************************************************
 //  Globals
@@ -16,6 +13,7 @@
 #define MAX_STR_LEN 256
 #define MAX_ACTIONS 64
 #define MAX_ACTIONSETS 16
+#define PI_F 3.141592654f
 
 //openvr related
 typedef struct {
@@ -41,16 +39,16 @@ action                  g_actions[MAX_ACTIONS];
 int                     g_actionCount = 0;
 
 //directx
-typedef HRESULT(APIENTRY* CreateTexture) (IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
-CreateTexture           g_CreateTextureOriginal = NULL;
+typedef HRESULT         (APIENTRY *CreateTexture)(IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
+char                    g_createTextureOrigBytes[14];
+CreateTexture           g_createTexture = NULL;
 ID3D11Device*           g_d3d11Device = NULL;
 ID3D11Texture2D*        g_d3d11Texture = NULL;
 HANDLE                  g_sharedTexture = NULL;
-DWORD_PTR               g_CreateTextureAddr = NULL;
 IDirect3DDevice9*       g_pD3D9Device = NULL;
 
 //other
-typedef void* (*CreateInterfaceFn)(const char* pName, int* pReturnCode);
+typedef void*           (*CreateInterfaceFn)(const char* pName, int* pReturnCode);
 float                   g_horizontalFOVLeft = 0;
 float                   g_horizontalFOVRight = 0;
 float                   g_aspectRatioLeft = 0;
@@ -64,11 +62,13 @@ float                   g_verticalOffsetRight = 0;
 //  CreateTexture hook
 //*************************************************************************
 HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9** tex, HANDLE* shared_handle) {
+    if(WriteProcessMemory(GetCurrentProcess(), g_createTexture, g_createTextureOrigBytes, 14, NULL) == 0)
+        MessageBoxA(NULL, "WriteProcessMemory from hook failed", "", NULL);
     if (g_sharedTexture == NULL) {
         shared_handle = &g_sharedTexture;
         pool = D3DPOOL_DEFAULT;
     }
-    return g_CreateTextureOriginal(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
+    return g_createTexture(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
 };
 
 
@@ -78,7 +78,7 @@ HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UI
 //    Returns: number
 //*************************************************************************
 LUA_FUNCTION(VRMOD_GetVersion) {
-    LUA->PushNumber(17);
+    LUA->PushNumber(18);
     return 1;
 }
 
@@ -117,8 +117,8 @@ LUA_FUNCTION(VRMOD_Init) {
     float tan_ny = fabsf((-1.0f - yoffset) / yscale);
     float w = tan_px + tan_nx;
     float h = tan_py + tan_ny;
-    g_horizontalFOVLeft = atan(w / 2.0f) * 180 / 3.141592654 * 2;
-    //g_verticalFOV = atan(h / 2.0f) * 180 / 3.141592654 * 2;
+    g_horizontalFOVLeft = atanf(w / 2.0f) * 180 / PI_F * 2;
+    //g_verticalFOV = atan(h / 2.0f) * 180 / PI_F * 2;
     g_aspectRatioLeft = w / h;
     g_horizontalOffsetLeft = xoffset;
     g_verticalOffsetLeft = yoffset;
@@ -134,7 +134,7 @@ LUA_FUNCTION(VRMOD_Init) {
     tan_ny = fabsf((-1.0f - yoffset) / yscale);
     w = tan_px + tan_nx;
     h = tan_py + tan_ny;
-    g_horizontalFOVRight = atan(w / 2.0f) * 180 / 3.141592654 * 2;
+    g_horizontalFOVRight = atanf(w / 2.0f) * 180 / PI_F * 2;
     g_aspectRatioRight = w / h;
     g_horizontalOffsetRight = xoffset;
     g_verticalOffsetRight = yoffset;
@@ -150,7 +150,7 @@ LUA_FUNCTION(VRMOD_Init) {
 #else
     g_pD3D9Device = **(IDirect3DDevice9***)(((DWORD_PTR**)CreateInterface("ShaderDevice001", NULL))[0][5] + 2);
 #endif
-    g_CreateTextureAddr = ((DWORD_PTR*)(((DWORD_PTR*)g_pD3D9Device)[0]))[23];
+    g_createTexture = ((CreateTexture**)g_pD3D9Device)[0][23];
 
     return 0;
 }
@@ -188,7 +188,7 @@ LUA_FUNCTION(VRMOD_SetActionManifest) {
             if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].fullname, MAX_STR_LEN) != 1)
                 break;
             g_actions[g_actionCount].name = g_actions[g_actionCount].fullname;
-            for (int i = 0; i < strlen(g_actions[g_actionCount].fullname); i++) {
+            for (unsigned int i = 0; i < strlen(g_actions[g_actionCount].fullname); i++) {
                 if (g_actions[g_actionCount].fullname[i] == '/')
                     g_actions[g_actionCount].name = g_actions[g_actionCount].fullname + i + 1;
             }
@@ -335,15 +335,15 @@ LUA_FUNCTION(VRMOD_GetPoses) {
             pos.x = -mat.m[2][3];
             pos.y = -mat.m[0][3];
             pos.z = mat.m[1][3];
-            ang.x = asin(mat.m[1][2]) * (180.0 / 3.141592654);
-            ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0 / 3.141592654);
-            ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0 / 3.141592654);
+            ang.x = asinf(mat.m[1][2]) * (180.0f / PI_F);
+            ang.y = atan2f(mat.m[0][2], mat.m[2][2]) * (180.0f / PI_F);
+            ang.z = atan2f(-mat.m[1][0], mat.m[1][1]) * (180.0f / PI_F);
             vel.x = -pose.vVelocity.v[2];
             vel.y = -pose.vVelocity.v[0];
             vel.z = pose.vVelocity.v[1];
-            angvel.x = -pose.vAngularVelocity.v[2] * (180.0 / 3.141592654);
-            angvel.y = -pose.vAngularVelocity.v[0] * (180.0 / 3.141592654);
-            angvel.z = pose.vAngularVelocity.v[1] * (180.0 / 3.141592654);
+            angvel.x = -pose.vAngularVelocity.v[2] * (180.0f / PI_F);
+            angvel.y = -pose.vAngularVelocity.v[0] * (180.0f / PI_F);
+            angvel.z = pose.vAngularVelocity.v[1] * (180.0f / PI_F);
 
             LUA->CreateTable();
 
@@ -418,13 +418,19 @@ LUA_FUNCTION(VRMOD_GetActions) {
 //    Lua function: VRMOD_ShareTextureBegin()
 //*************************************************************************
 LUA_FUNCTION(VRMOD_ShareTextureBegin) {
-    g_CreateTextureOriginal = (CreateTexture)g_CreateTextureAddr;
-    if (MH_Initialize() != MH_OK)
-        LUA->ThrowError("MH_Initialize failed");
-    if (MH_CreateHook((DWORD_PTR*)g_CreateTextureAddr, &CreateTextureHook, reinterpret_cast<void**>(&g_CreateTextureOriginal)) != MH_OK)
-        LUA->ThrowError("MH_CreateHook failed");
-    if (MH_EnableHook((DWORD_PTR*)g_CreateTextureAddr) != MH_OK)
-        LUA->ThrowError("MH_EnableHook failed");
+
+    char patch[] = "\x68\x0\x0\x0\x0\xC3\x44\x24\x04\x0\x0\x0\x0\xC3";
+    *(DWORD*)(patch + 1) = (DWORD)((DWORD_PTR)CreateTextureHook);
+#ifdef _WIN64
+    patch[5] = '\xC7';
+    *(DWORD*)(patch + 9) = (DWORD)((DWORD_PTR)CreateTextureHook >> 32);
+#endif
+
+    if(ReadProcessMemory(GetCurrentProcess(), g_createTexture, g_createTextureOrigBytes, 14, NULL) == 0) 
+        LUA->ThrowError("ReadProcessMemory failed");
+    if(WriteProcessMemory(GetCurrentProcess(), g_createTexture, patch, 14, NULL) == 0)
+        LUA->ThrowError("WriteProcessMemory failed");
+
     return 0;
 }
 
@@ -441,10 +447,6 @@ LUA_FUNCTION(VRMOD_ShareTextureFinish) {
         LUA->ThrowError("OpenSharedResource failed");
     if (FAILED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&g_d3d11Texture)))
         LUA->ThrowError("QueryInterface failed");
-    MH_DisableHook((DWORD_PTR*)g_CreateTextureAddr);
-    MH_RemoveHook((DWORD_PTR*)g_CreateTextureAddr);
-    if (MH_Uninitialize() != MH_OK)
-        LUA->ThrowError("MH_Uninitialize failed");
     return 0;
 }
 
@@ -501,7 +503,6 @@ LUA_FUNCTION(VRMOD_Shutdown) {
     }
     g_d3d11Texture = NULL;
     g_sharedTexture = NULL;
-    g_CreateTextureAddr = NULL;
     g_actionCount = 0;
     g_actionSetCount = 0;
     g_activeActionSetCount = 0;
@@ -514,10 +515,10 @@ LUA_FUNCTION(VRMOD_Shutdown) {
 //*************************************************************************
 LUA_FUNCTION(VRMOD_TriggerHaptic) {
     const char* actionName = LUA->CheckString(1);
-    unsigned int nameLen = strlen(actionName);
+    size_t nameLen = strlen(actionName);
     for (int i = 0; i < g_actionCount; i++) {
         if (strlen(g_actions[i].name) == nameLen && memcmp(g_actions[i].name, actionName, nameLen) == 0) {
-            g_pInput->TriggerHapticVibrationAction(g_actions[i].handle, LUA->CheckNumber(2), LUA->CheckNumber(3), LUA->CheckNumber(4), LUA->CheckNumber(5), vr::k_ulInvalidInputValueHandle);
+            g_pInput->TriggerHapticVibrationAction(g_actions[i].handle, (float)LUA->CheckNumber(2), (float)LUA->CheckNumber(3), (float)LUA->CheckNumber(4), (float)LUA->CheckNumber(5), vr::k_ulInvalidInputValueHandle);
             break;
         }
     }
