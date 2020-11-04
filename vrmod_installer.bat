@@ -1,5 +1,5 @@
 @echo off
-title VRMod Installer
+title VRMod Module Installer
 
 FOR /F "tokens=2* skip=2" %%a in ('reg query "HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam" /v "InstallPath" 2^>nul') do set steam_dir=%%b
 FOR /F "tokens=2* skip=2" %%a in ('reg query "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam" /v "InstallPath" 2^>nul') do set steam_dir=%%b
@@ -30,7 +30,7 @@ set /p choice="> "
 cls
 if %choice%==1 GOTO install
 if %choice%==2 GOTO uninstall
-echo invalid option
+echo Invalid option. Valid options are: 1, 2
 pause
 exit
 
