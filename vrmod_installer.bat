@@ -1,6 +1,14 @@
 @echo off
+SETLOCAL EnableDelayedExpansion
 title VRMod Module Installer
 
+FOR /F "tokens=*" %%a in ('powershell -command $PSVersionTable.PSVersion.Major 2^>nul') do set powershell_version=%%a
+if defined powershell_version if !powershell_version! geq 4 GOTO prompt
+echo This script requires Windows PowerShell 4.0+ (included in Windows 8.1 and later)
+pause & exit
+
+:prompt
+cls
 FOR /F "tokens=2* skip=2" %%a in ('reg query "HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam" /v "InstallPath" 2^>nul') do set steam_dir=%%b
 FOR /F "tokens=2* skip=2" %%a in ('reg query "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam" /v "InstallPath" 2^>nul') do set steam_dir=%%b
 if not defined steam_dir (
@@ -18,7 +26,7 @@ if not defined gmod_dir (
 	exit
 )
 
-
+echo Game folder: %gmod_dir%
 echo Make sure Garry's Mod is not running before proceeding.
 echo.
 
@@ -32,9 +40,10 @@ if %choice%==1 GOTO install
 if %choice%==2 GOTO uninstall
 echo Invalid option. Valid options are: 1, 2
 pause
-exit
+goto prompt
 
 :install
+pushd %gmod_dir%
 echo Downloading VRMod repository...
 powershell -command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest https://github.com/catsethecat/vrmod-module/archive/master.zip -Out vrmod.zip
 
@@ -46,10 +55,9 @@ if not exist vrmod.zip (
 
 powershell -command "$testlol = Get-FileHash -a SHA1 vrmod.zip | Select-Object -expandproperty Hash | Out-String; echo ('vrmod.zip SHA1: ' + $testlol)"
 
-echo Game folder: %gmod_dir%
 echo Continue installation Y/N?
 set /p choice="> "
-if /I not %choice% == Y exit
+if /I not %choice% == Y del vrmod.zip & exit
 cls
 
 echo Uncompressing...
