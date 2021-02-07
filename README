@@ -6,60 +6,57 @@ To install or update the module, open the "install" folder and read "INSTALLATIO
 # Lua functions
 #######################################################################################
 
-Function: number VRMOD_GetVersion()
+Function: number vrmod.GetVersion()
 Description: Returns the module version
 
-Function: boolean VRMOD_IsHMDPresent()
+Function: boolean vrmod.IsHMDPresent()
 Description: Returns true if a VR headset is connected
 
-Function: VRMOD_Init()
+Function: vrmod.Init()
 Description: Starts OpenVR and performs some initialization.
 This must be called successfully before using any of the functions listed below.
-You must call VRMOD_Shutdown() before calling this again.
+You must call vrmod.Shutdown() before calling this again.
 
-Function: VRMOD_Shutdown()
+Function: vrmod.Shutdown()
 Description: Shuts down OpenVR and performs some clean up.
 You must not call any of the functions listed below until you successfully run
-VRMOD_Init() again.
+vrmod.Init() again.
 
-Function: VRMOD_SetActionManifest( string fileName )
+Function: vrmod.SetActionManifest( string fileName )
 Description: Sets the specified file as the action manifest.
 Path is relative to garrysmod/data/.
 This should be called only once between init/shutdown.
 
-Function: VRMOD_SetActiveActionSets( string actionSetName, ... )
+Function: vrmod.SetActiveActionSets( string actionSetName, ... )
 Description: Makes the given action sets currently active.
 
-Function: table VRMOD_GetViewParameters()
-Description: Returns the following table of information that can be used to set up
-proper 3D rendering
+Function: table vrmod.GetDisplayInfo()
+Description: Returns the following table of information:
 {
-  number horizontalFOVLeft,
-  number horizontalFOVRight,
-  number aspectRatioLeft,
-  number aspectRatioRight,
-  number recommendedWidth,
-  number recommendedHeight,
-  vector eyeToHeadTransformPosLeft,
-  vector eyeToHeadTransformPosRight,
+  table ProjectionLeft, --Left eye projection matrix as 2D table [row][col]
+  table ProjectionRight,
+  table TransformLeft, --Left eye transform matrix
+  table TransformRight,
+  number RecommendedWidth, --Recommended render target resolution (per eye)
+  number RecommendedHeight,
 }
 
-Function: VRMOD_ShareTextureBegin()
+Function: vrmod.ShareTextureBegin()
 Description: After calling this function, the next texture that is created in the game
 will be shared with the module. You should create a new texture (using GetRenderTarget
 for example) immediately after calling this function. This should be called only once
 between init/shutdown.
 
-Function: VRMOD_ShareTextureFinish()
+Function: vrmod.ShareTextureFinish()
 Description: This must be called after creating a texture to finish the texture sharing
 process. This should be called only once between init/shutdown.
 
-Function: VRMOD_UpdatePosesAndActions()
+Function: vrmod.UpdatePosesAndActions()
 Description: This should be called once per frame to update the poses and actions
 which you can then use to render with.
 This function is also responsible for syncing the fps to the headsets refresh rate.
 
-Function: table VRMOD_GetPoses()
+Function: table vrmod.GetPoses()
 Description: Returns a table of poses. The hmd pose is automatically included, the
 rest are defined by the action manifest.
 {
@@ -72,7 +69,7 @@ rest are defined by the action manifest.
   ...
 }
 
-Function: table VRMOD_GetActions()
+Function: table vrmod.GetActions()
 Description: Returns a table of actions (defined by the action manifest) and their states.
 It could look something like this:
 {
@@ -93,18 +90,21 @@ It could look something like this:
   }
 }
 
-Function: VRMOD_SubmitSharedTexture()
+Function: vrmod.SetSubmitTextureBounds( uMinLeft, vMinLeft, uMaxLeft, vMaxLeft, 
+  uMinRight, vMinRight, uMaxRight, vMaxRight )
+Description: Sets UV coordinates to use for the left/right eye areas of the shared
+texture
+
+Function: vrmod.SubmitSharedTexture()
 Description: Submits the shared texture to the VR Compositor. This should be called
 once per frame, after you have rendered to / updated the shared texture.
-The left half of the texture is used for the left eye, and the right half is used
-for the right eye.
 
-Function: VRMOD_TriggerHaptic( string actionName, number delay, number duration,
+Function: vrmod.TriggerHaptic( string actionName, number delay, number duration,
   number frequency, number amplitude )
 Description: Triggers the specified vibration action (defined by the action manifest)
 using the given parameters.
 
-Function: table VRMOD_GetTrackedDeviceNames()
+Function: table vrmod.GetTrackedDeviceNames()
 Description: returns a sequential numerical indexed table with names of all connected
 tracked devices. For example:
 {
