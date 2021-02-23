@@ -30,7 +30,7 @@ This should be called only once between init/shutdown.
 Function: vrmod.SetActiveActionSets( string actionSetName, ... )
 Description: Makes the given action sets currently active.
 
-Function: table vrmod.GetDisplayInfo()
+Function: table vrmod.GetDisplayInfo( number nearZ, number farZ )
 Description: Returns the following table of information:
 {
   table ProjectionLeft, --Left eye projection matrix as 2D table [row][col]
@@ -69,8 +69,9 @@ rest are defined by the action manifest.
   ...
 }
 
-Function: table vrmod.GetActions()
+Function: table, table vrmod.GetActions()
 Description: Returns a table of actions (defined by the action manifest) and their states.
+The second table only contains boolean actions that changed state from the previous call.
 It could look something like this:
 {
   boolean boolean_example,
