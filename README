@@ -71,7 +71,7 @@ rest are defined by the action manifest.
 
 Function: table, table vrmod.GetActions()
 Description: Returns a table of actions (defined by the action manifest) and their states.
-The second table only contains boolean actions that changed state from the previous call.
+The second table only includes boolean actions that changed state from the previous call.
 It could look something like this:
 {
   boolean boolean_example,
