@@ -11,11 +11,29 @@
 #define MAX_ACTIONSETS 16
 #define PI_F 3.141592654f
 
+enum EActionType{
+    ActionType_Pose = 439,
+    ActionType_Vector1 = 708,
+    ActionType_Vector2 = 709,
+    ActionType_Boolean = 736,
+    ActionType_Skeleton = 869,
+    ActionType_Vibration = 974,
+};
+
+enum ELuaRefIndex{
+    LuaRefIndex_EmptyTable,
+    LuaRefIndex_PoseTable,
+    LuaRefIndex_HmdPose,
+    LuaRefIndex_ActionTable,
+    LuaRefIndex_Max,
+};
+
 typedef struct {
     vr::VRActionHandle_t handle;
     char fullname[MAX_STR_LEN];
-    char type[MAX_STR_LEN];
+    int luaRefs[2];
     char* name;
+    int type;
 }action;
 
 typedef struct {
@@ -36,6 +54,8 @@ char                    g_errorString[MAX_STR_LEN];
 vr::VRTextureBounds_t   g_textureBoundsLeft;
 vr::VRTextureBounds_t   g_textureBoundsRight;
 vr::Texture_t           g_vrTexture;
+int                     g_luaRefs[LuaRefIndex_Max];
+int                     g_luaRefCount = 0;
 
 typedef HRESULT         (APIENTRY* CreateTexture)(IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
 char                    g_createTextureOrigBytes[14];
@@ -58,7 +78,7 @@ HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UI
 };
 
 LUA_FUNCTION(GetVersion) {
-    LUA->PushNumber(19);
+    LUA->PushNumber(20);
     return 1;
 }
 
@@ -78,6 +98,11 @@ LUA_FUNCTION(Init) {
     }
     if (!vr::VRCompositor())
         LUA->ThrowError("VRCompositor failed");
+    for(int i = 0; i < LuaRefIndex_Max; i++){
+        LUA->CreateTable();
+        g_luaRefs[i] = LUA->ReferenceCreate();
+        g_luaRefCount++;
+    }
     HMODULE hMod = GetModuleHandleA("shaderapidx9.dll");
     if (hMod == NULL) LUA->ThrowError("GetModuleHandleA failed");
     CreateInterfaceFn CreateInterface = (CreateInterfaceFn)GetProcAddress(hMod, "CreateInterface");
@@ -124,10 +149,17 @@ LUA_FUNCTION(SetActionManifest) {
             g_pInput->GetActionHandle(g_actions[g_actionCount].fullname, &(g_actions[g_actionCount].handle));
         }
         if (strcmp(word, "type") == 0) {
-            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].type, MAX_STR_LEN) != 1)
+            char typeStr[MAX_STR_LEN] = {0};
+            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", typeStr, MAX_STR_LEN) != 1)
                 break;
+            for (int i = 0; typeStr[i]; i++)
+                g_actions[g_actionCount].type += typeStr[i];
         }
-        if (g_actions[g_actionCount].fullname[0] && g_actions[g_actionCount].type[0]) {
+        if (g_actions[g_actionCount].fullname[0] && g_actions[g_actionCount].type) {
+            for(int i = 0; i < 2; i++){
+                LUA->CreateTable();
+                g_actions[g_actionCount].luaRefs[i] = LUA->ReferenceCreate();
+            }
             g_actionCount++;
             if (g_actionCount == MAX_ACTIONS)
                 break;
@@ -180,11 +212,13 @@ void PushMatrixAsTable(GarrysMod::Lua::ILuaBase* LUA, float* mtx, unsigned int r
 }
 
 LUA_FUNCTION(GetDisplayInfo) {
+    float fNearZ = (float)LUA->CheckNumber(1);
+    float fFarZ = (float)LUA->CheckNumber(2);
     uint32_t recommendedWidth = 0;
     uint32_t recommendedHeight = 0;
     g_pSystem->GetRecommendedRenderTargetSize(&recommendedWidth, &recommendedHeight);
-    vr::HmdMatrix44_t projLeft = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, 1, 10);
-    vr::HmdMatrix44_t projRight = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, 1, 10);
+    vr::HmdMatrix44_t projLeft = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, fNearZ, fFarZ);
+    vr::HmdMatrix44_t projRight = g_pSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, fNearZ, fFarZ);
     vr::HmdMatrix34_t transformLeft = g_pSystem->GetEyeToHeadTransform(vr::Eye_Left);
     vr::HmdMatrix34_t transformRight = g_pSystem->GetEyeToHeadTransform(vr::Eye_Right);
     LUA->CreateTable();
@@ -211,23 +245,18 @@ LUA_FUNCTION(UpdatePosesAndActions) {
 
 LUA_FUNCTION(GetPoses) {
     vr::InputPoseActionData_t poseActionData;
-    vr::TrackedDevicePose_t pose;
-    char poseName[MAX_STR_LEN];
-    LUA->CreateTable();
+    vr::TrackedDevicePose_t pose = g_poses[0];
+    char* poseName = "hmd";
+    int poseRef = g_luaRefs[LuaRefIndex_HmdPose];
+    LUA->ReferencePush(g_luaRefs[LuaRefIndex_PoseTable]);
     for (int i = -1; i < g_actionCount; i++) {
-        poseActionData.pose.bPoseIsValid = 0;
-        pose.bPoseIsValid = 0;
-        if (i == -1) {
-            pose = g_poses[0];
-            memcpy(poseName, "hmd", 4);
-        }
-        else if (strcmp(g_actions[i].type, "pose") == 0) {
-            g_pInput->GetPoseActionData(g_actions[i].handle, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
-            pose = poseActionData.pose;
-            strcpy_s(poseName, MAX_STR_LEN, g_actions[i].name);
-        }
-        else {
-            continue;
+        if (i != -1){
+            if (g_actions[i].type == ActionType_Pose) {
+                g_pInput->GetPoseActionData(g_actions[i].handle, vr::TrackingUniverseStanding, 0, &poseActionData, sizeof(poseActionData), vr::k_ulInvalidInputValueHandle);
+                pose = poseActionData.pose;
+                poseName = g_actions[i].name;
+                poseRef = g_actions[i].luaRefs[0];
+            } else continue;
         }
         if (pose.bPoseIsValid) {
             vr::HmdMatrix34_t mat = pose.mDeviceToAbsoluteTracking;
@@ -247,7 +276,7 @@ LUA_FUNCTION(GetPoses) {
             angvel.x = -pose.vAngularVelocity.v[2] * (180.0f / PI_F);
             angvel.y = -pose.vAngularVelocity.v[0] * (180.0f / PI_F);
             angvel.z = pose.vAngularVelocity.v[1] * (180.0f / PI_F);
-            LUA->CreateTable();
+            LUA->ReferencePush(poseRef);
             LUA->PushVector(pos);
             LUA->SetField(-2, "pos");
             LUA->PushVector(vel);
@@ -266,19 +295,27 @@ LUA_FUNCTION(GetActions) {
     vr::InputDigitalActionData_t digitalActionData;
     vr::InputAnalogActionData_t analogActionData;
     vr::VRSkeletalSummaryData_t skeletalSummaryData;
-    LUA->CreateTable();
+    char* changedActionNames[MAX_ACTIONS];
+    bool changedActionStates[MAX_ACTIONS];
+    int changedActionCount = 0;
+    LUA->ReferencePush(g_luaRefs[LuaRefIndex_ActionTable]);
     for (int i = 0; i < g_actionCount; i++) {
-        if (strcmp(g_actions[i].type, "boolean") == 0) {
+        if (g_actions[i].type == ActionType_Boolean) {
             LUA->PushBool((g_pInput->GetDigitalActionData(g_actions[i].handle, &digitalActionData, sizeof(digitalActionData), vr::k_ulInvalidInputValueHandle) == vr::VRInputError_None && digitalActionData.bState));
             LUA->SetField(-2, g_actions[i].name);
+            if(digitalActionData.bChanged){
+                changedActionNames[changedActionCount] = g_actions[i].name;
+                changedActionStates[changedActionCount] = digitalActionData.bState;
+                changedActionCount++;
+            }
         }
-        else if (strcmp(g_actions[i].type, "vector1") == 0) {
+        else if (g_actions[i].type == ActionType_Vector1) {
             g_pInput->GetAnalogActionData(g_actions[i].handle, &analogActionData, sizeof(analogActionData), vr::k_ulInvalidInputValueHandle);
             LUA->PushNumber(analogActionData.x);
             LUA->SetField(-2, g_actions[i].name);
         }
-        else if (strcmp(g_actions[i].type, "vector2") == 0) {
-            LUA->CreateTable();
+        else if (g_actions[i].type == ActionType_Vector2) {
+            LUA->ReferencePush(g_actions[i].luaRefs[0]);
             g_pInput->GetAnalogActionData(g_actions[i].handle, &analogActionData, sizeof(analogActionData), vr::k_ulInvalidInputValueHandle);
             LUA->PushNumber(analogActionData.x);
             LUA->SetField(-2, "x");
@@ -286,10 +323,10 @@ LUA_FUNCTION(GetActions) {
             LUA->SetField(-2, "y");
             LUA->SetField(-2, g_actions[i].name);
         }
-        else if (strcmp(g_actions[i].type, "skeleton") == 0) {
+        else if (g_actions[i].type == ActionType_Skeleton) {
             g_pInput->GetSkeletalSummaryData(g_actions[i].handle, &skeletalSummaryData);
-            LUA->CreateTable();
-            LUA->CreateTable();
+            LUA->ReferencePush(g_actions[i].luaRefs[0]);
+            LUA->ReferencePush(g_actions[i].luaRefs[1]);
             for (int j = 0; j < 5; j++) {
                 LUA->PushNumber(j + 1);
                 LUA->PushNumber(skeletalSummaryData.flFingerCurl[j]);
@@ -299,7 +336,16 @@ LUA_FUNCTION(GetActions) {
             LUA->SetField(-2, g_actions[i].name);
         }
     }
-    return 1;
+    if (changedActionCount == 0){
+        LUA->ReferencePush(g_luaRefs[LuaRefIndex_EmptyTable]);
+    }else{
+        LUA->CreateTable();
+        for(int i = 0; i < changedActionCount; i++){
+            LUA->PushBool(changedActionStates[i]);
+            LUA->SetField(-2,changedActionNames[i]);
+        }
+    }
+    return 2;
 }
 
 LUA_FUNCTION(ShareTextureBegin) {
@@ -369,6 +415,12 @@ LUA_FUNCTION(Shutdown) {
         g_d3d11Device->Release();
         g_d3d11Device = NULL;
     }
+    for(int i = 0; i < g_luaRefCount; i++)
+        LUA->ReferenceFree(g_luaRefs[i]);
+    g_luaRefCount = 0;
+    for(int i = 0; i < g_actionCount; i++)
+        for(int j = 0; j < 2; j++)
+            LUA->ReferenceFree(g_actions[i].luaRefs[j]);
     g_d3d11Texture = NULL;
     g_sharedTexture = NULL;
     g_actionCount = 0;
@@ -380,9 +432,8 @@ LUA_FUNCTION(Shutdown) {
 
 LUA_FUNCTION(TriggerHaptic) {
     const char* actionName = LUA->CheckString(1);
-    size_t nameLen = strlen(actionName);
     for (int i = 0; i < g_actionCount; i++) {
-        if (strlen(g_actions[i].name) == nameLen && memcmp(g_actions[i].name, actionName, nameLen) == 0) {
+        if (strcmp(g_actions[i].name, actionName) == 0) {
             g_pInput->TriggerHapticVibrationAction(g_actions[i].handle, (float)LUA->CheckNumber(2), (float)LUA->CheckNumber(3), (float)LUA->CheckNumber(4), (float)LUA->CheckNumber(5), vr::k_ulInvalidInputValueHandle);
             break;
         }
