@@ -118,10 +118,15 @@ tracked devices. For example:
 # Compiling
 #######################################################################################
 
-To compile the module yourself:
+Windows:
 step 1: have Visual Studio installed
 step 2: make sure the path to vcvarsall is correct inside build.bat
 step 3: run build.bat
+
+Linux:
+step 1: have the terminal open with the current working directory set to the folder
+where build.sh is located
+step 2: run build.sh
 
 #######################################################################################
 # Credits / Special Thanks
