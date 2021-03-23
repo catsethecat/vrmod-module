@@ -1,23 +1,35 @@
-#define WIN32_LEAN_AND_MEAN
 #include <gmod/Interface.h>
+#include <openvr/openvr.h>
 #include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <stdint.h>
+#include <limits.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <d3d9.h>
 #include <d3d11.h>
-#include <openvr/openvr.h>
+#define PATH_MAX MAX_PATH
+#else
+#include <GL/gl.h>
+#include <sys/mman.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#endif
 
-#define MAX_STR_LEN 256
-#define MAX_ACTIONS 64
-#define MAX_ACTIONSETS 16
-#define PI_F 3.141592654f
+#define MAX_STR_LEN     256
+#define MAX_ACTIONS     64
+#define MAX_ACTIONSETS  16
+#define PI_F            3.141592654f
 
 enum EActionType{
-    ActionType_Pose = 439,
-    ActionType_Vector1 = 708,
-    ActionType_Vector2 = 709,
-    ActionType_Boolean = 736,
-    ActionType_Skeleton = 869,
-    ActionType_Vibration = 974,
+    ActionType_Pose         = 439,
+    ActionType_Vector1      = 708,
+    ActionType_Vector2      = 709,
+    ActionType_Boolean      = 736,
+    ActionType_Skeleton     = 869,
+    ActionType_Vibration    = 974,
 };
 
 enum ELuaRefIndex{
@@ -57,16 +69,15 @@ vr::Texture_t           g_vrTexture;
 int                     g_luaRefs[LuaRefIndex_Max];
 int                     g_luaRefCount = 0;
 
-typedef HRESULT         (APIENTRY* CreateTexture)(IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
 char                    g_createTextureOrigBytes[14];
+#ifdef _WIN32
+typedef HRESULT         (APIENTRY* CreateTexture)(IDirect3DDevice9*, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL, IDirect3DTexture9**, HANDLE*);
 CreateTexture           g_createTexture = NULL;
 ID3D11Device*           g_d3d11Device = NULL;
 ID3D11Texture2D*        g_d3d11Texture = NULL;
 HANDLE                  g_sharedTexture = NULL;
 IDirect3DDevice9*       g_pD3D9Device = NULL;
-
 typedef void*           (*CreateInterfaceFn)(const char* pName, int* pReturnCode);
-
 HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9** tex, HANDLE* shared_handle) {
     if (WriteProcessMemory(GetCurrentProcess(), g_createTexture, g_createTextureOrigBytes, 14, NULL) == 0)
         MessageBoxA(NULL, "WriteProcessMemory from hook failed", "", NULL);
@@ -76,6 +87,33 @@ HRESULT APIENTRY CreateTextureHook(IDirect3DDevice9* pDevice, UINT w, UINT h, UI
     }
     return g_createTexture(pDevice, w, h, levels, usage, format, pool, tex, shared_handle);
 };
+#else
+typedef struct{
+    void ClearEntryPoints();
+    uint64_t m_nTotalGLCycles, m_nTotalGLCalls;
+    int unknown1;
+    int unknown2; 
+    int m_nOpenGLVersionMajor; 
+    int m_nOpenGLVersionMinor;  
+    int m_nOpenGLVersionPatch;
+    bool m_bHave_OpenGL;
+    char *m_pGLDriverStrings[4];
+    int m_nDriverProvider;        
+    void *firstFunc;
+}COpenGLEntryPoints;
+typedef void *(*GL_GetProcAddressCallbackFunc_t)(const char *, bool &, const bool, void *);
+typedef COpenGLEntryPoints*(*GetOpenGLEntryPoints_t)(GL_GetProcAddressCallbackFunc_t callback);
+typedef void            (*glGenTextures_t)(GLsizei n, GLuint *textures);
+void*                   g_createTexture = NULL;
+GLuint                  g_sharedTexture = GL_INVALID_VALUE;
+COpenGLEntryPoints*     g_GL = NULL;
+void CreateTextureHook(GLsizei n, GLuint *textures) {
+    memcpy((void*)g_createTexture, (void*)g_createTextureOrigBytes, 14);
+    ((glGenTextures_t)g_createTexture)(n, textures);
+    g_sharedTexture = textures[0];
+    return;
+}
+#endif
 
 LUA_FUNCTION(GetVersion) {
     LUA->PushNumber(20);
@@ -93,7 +131,7 @@ LUA_FUNCTION(Init) {
     vr::HmdError error = vr::VRInitError_None;
     g_pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
     if (error != vr::VRInitError_None) {
-        sprintf_s(g_errorString, MAX_STR_LEN, "VR_Init failed: %i", error);
+        snprintf(g_errorString, MAX_STR_LEN, "VR_Init failed: %i", error);
         LUA->ThrowError(g_errorString);
     }
     if (!vr::VRCompositor())
@@ -103,43 +141,69 @@ LUA_FUNCTION(Init) {
         g_luaRefs[i] = LUA->ReferenceCreate();
         g_luaRefCount++;
     }
+#ifdef _WIN32
     HMODULE hMod = GetModuleHandleA("shaderapidx9.dll");
     if (hMod == NULL) LUA->ThrowError("GetModuleHandleA failed");
     CreateInterfaceFn CreateInterface = (CreateInterfaceFn)GetProcAddress(hMod, "CreateInterface");
     if (CreateInterface == NULL) LUA->ThrowError("GetProcAddress failed");
-#ifdef _WIN64
+# ifdef _WIN64
     DWORD_PTR fnAddr = ((DWORD_PTR**)CreateInterface("ShaderDevice001", NULL))[0][5];
     g_pD3D9Device = *(IDirect3DDevice9**)(fnAddr + 8 + (*(DWORD_PTR*)(fnAddr + 3) & 0xFFFFFFFF));
-#else
+# else
     g_pD3D9Device = **(IDirect3DDevice9***)(((DWORD_PTR**)CreateInterface("ShaderDevice001", NULL))[0][5] + 2);
-#endif
+# endif
     g_createTexture = ((CreateTexture**)g_pD3D9Device)[0][23];
+#else
+# ifdef __x86_64__
+    void *lib = dlopen("libtogl_client.so", RTLD_NOW | RTLD_NOLOAD);
+# else
+    void *lib = dlopen("libtogl.so", RTLD_NOW | RTLD_NOLOAD);
+# endif
+    if(lib==NULL)
+        LUA->ThrowError("dlopen fail");
+    GetOpenGLEntryPoints_t GetOpenGLEntryPoints = (GetOpenGLEntryPoints_t)dlsym(lib, "GetOpenGLEntryPoints");
+    if(GetOpenGLEntryPoints==NULL)
+        LUA->ThrowError("dlsym fail");
+    g_GL = GetOpenGLEntryPoints(NULL);
+    dlclose(lib);
+# ifdef __x86_64__
+    g_createTexture = *((void**)&g_GL->firstFunc+50);
+# else
+    g_createTexture = *((void**)&g_GL->firstFunc+48);
+# endif
+#endif
     return 0;
 }
 
 LUA_FUNCTION(SetActionManifest) {
     const char* fileName = LUA->CheckString(1);
-    char currentDir[MAX_STR_LEN];
-    GetCurrentDirectory(MAX_STR_LEN, currentDir);
-    char path[MAX_STR_LEN];
-    sprintf_s(path, MAX_STR_LEN, "%s\\garrysmod\\data\\%s", currentDir, fileName);
+    char path[PATH_MAX];
+    char currentDir[PATH_MAX];
+#ifdef _WIN32
+    GetCurrentDirectory(PATH_MAX, currentDir);
+#else
+    if(getcwd(currentDir, PATH_MAX) == NULL)
+        LUA->ThrowError("getcwd failed");
+#endif
+    if (snprintf(path, PATH_MAX, "%s/garrysmod/data/%s", currentDir, fileName) >= PATH_MAX)
+        LUA->ThrowError("SetActionManifest path too long");
     g_pInput = vr::VRInput();
-    if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None) {
+    if (g_pInput->SetActionManifestPath(path) != vr::VRInputError_None)
         LUA->ThrowError("SetActionManifestPath failed");
-    }
-    FILE* file = NULL;
-    fopen_s(&file, path, "r");
-    if (file == NULL) {
+    FILE* file = fopen(path, "r");
+    if (file == NULL)
         LUA->ThrowError("failed to open action manifest");
-    }
     memset(g_actions, 0, sizeof(g_actions));
     char word[MAX_STR_LEN];
-    while (fscanf_s(file, "%*[^\"]\"%[^\"]\"", word, MAX_STR_LEN) == 1 && strcmp(word, "actions") != 0);
-    while (fscanf_s(file, "%[^\"]\"", word, MAX_STR_LEN) == 1) {
+    char fmt1[MAX_STR_LEN], fmt2[MAX_STR_LEN];
+    snprintf(fmt1, MAX_STR_LEN, "%%*[^\"]\"%%%i[^\"]\"", MAX_STR_LEN-1);
+    snprintf(fmt2, MAX_STR_LEN, "%%%i[^\"]\"", MAX_STR_LEN-1);
+    while (fscanf(file, fmt1, word) == 1 && strcmp(word, "actions") != 0);
+    while (fscanf(file, fmt2, word) == 1) {
         if (strchr(word, ']') != nullptr)
             break;
         if (strcmp(word, "name") == 0) {
-            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", g_actions[g_actionCount].fullname, MAX_STR_LEN) != 1)
+            if (fscanf(file, fmt1, g_actions[g_actionCount].fullname) != 1)
                 break;
             g_actions[g_actionCount].name = g_actions[g_actionCount].fullname;
             for (unsigned int i = 0; i < strlen(g_actions[g_actionCount].fullname); i++) {
@@ -150,7 +214,7 @@ LUA_FUNCTION(SetActionManifest) {
         }
         if (strcmp(word, "type") == 0) {
             char typeStr[MAX_STR_LEN] = {0};
-            if (fscanf_s(file, "%*[^\"]\"%[^\"]\"", typeStr, MAX_STR_LEN) != 1)
+            if (fscanf(file, fmt1, typeStr) != 1)
                 break;
             for (int i = 0; typeStr[i]; i++)
                 g_actions[g_actionCount].type += typeStr[i];
@@ -246,7 +310,7 @@ LUA_FUNCTION(UpdatePosesAndActions) {
 LUA_FUNCTION(GetPoses) {
     vr::InputPoseActionData_t poseActionData;
     vr::TrackedDevicePose_t pose = g_poses[0];
-    char* poseName = "hmd";
+    char* poseName = (char*)"hmd";
     int poseRef = g_luaRefs[LuaRefIndex_HmdPose];
     LUA->ReferencePush(g_luaRefs[LuaRefIndex_PoseTable]);
     for (int i = -1; i < g_actionCount; i++) {
@@ -350,19 +414,28 @@ LUA_FUNCTION(GetActions) {
 
 LUA_FUNCTION(ShareTextureBegin) {
     char patch[] = "\x68\x0\x0\x0\x0\xC3\x44\x24\x04\x0\x0\x0\x0\xC3";
-    *(DWORD*)(patch + 1) = (DWORD)((DWORD_PTR)CreateTextureHook);
-#ifdef _WIN64
+    *(uint32_t*)(patch + 1) = (uint32_t)((uintptr_t)CreateTextureHook);
+#if defined _WIN64 || defined __x86_64__
     patch[5] = '\xC7';
-    *(DWORD*)(patch + 9) = (DWORD)((DWORD_PTR)CreateTextureHook >> 32);
+    *(uint32_t*)(patch + 9) = (uint32_t)((uintptr_t)CreateTextureHook >> 32);
 #endif
+#ifdef _WIN32
     if (ReadProcessMemory(GetCurrentProcess(), g_createTexture, g_createTextureOrigBytes, 14, NULL) == 0)
         LUA->ThrowError("ReadProcessMemory failed");
     if (WriteProcessMemory(GetCurrentProcess(), g_createTexture, patch, 14, NULL) == 0)
         LUA->ThrowError("WriteProcessMemory failed");
+#else
+    uintptr_t alignedAddr = (uintptr_t)g_createTexture & ~(getpagesize()-1);
+    if(mprotect((void*)alignedAddr, getpagesize(), PROT_READ | PROT_WRITE | PROT_EXEC) == -1)
+        LUA->ThrowError("mprotect fail");
+    memcpy((void*)g_createTextureOrigBytes, (void*)g_createTexture, 14);
+    memcpy((void*)g_createTexture, (void*)patch, 14);
+#endif
     return 0;
 }
 
 LUA_FUNCTION(ShareTextureFinish) {
+#ifdef _WIN32
     if (g_sharedTexture == NULL)
         LUA->ThrowError("g_sharedTexture is null");
     if (D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, NULL, D3D11_SDK_VERSION, &g_d3d11Device, NULL, NULL) != S_OK)
@@ -374,6 +447,12 @@ LUA_FUNCTION(ShareTextureFinish) {
         LUA->ThrowError("QueryInterface failed");
     g_vrTexture.handle = g_d3d11Texture;
     g_vrTexture.eType = vr::TextureType_DirectX;
+#else
+    if (g_sharedTexture == GL_INVALID_VALUE)
+        LUA->ThrowError("g_sharedTexture is invalid");
+    g_vrTexture.handle = (void*)(uintptr_t)g_sharedTexture;
+    g_vrTexture.eType = vr::TextureType_OpenGL;
+#endif
     g_vrTexture.eColorSpace = vr::ColorSpace_Auto;
     return 0;
 }
@@ -391,6 +470,7 @@ LUA_FUNCTION(SetSubmitTextureBounds) {
 }
 
 LUA_FUNCTION(SubmitSharedTexture) {
+#ifdef _WIN32
     if (g_d3d11Texture == NULL)
         return 0;
     IDirect3DQuery9* pEventQuery = nullptr;
@@ -401,6 +481,7 @@ LUA_FUNCTION(SubmitSharedTexture) {
         while (pEventQuery->GetData(nullptr, 0, D3DGETDATA_FLUSH) != S_OK);
         pEventQuery->Release();
     }
+#endif
     vr::VRCompositor()->Submit(vr::EVREye::Eye_Left, &g_vrTexture, &g_textureBoundsLeft);
     vr::VRCompositor()->Submit(vr::EVREye::Eye_Right, &g_vrTexture, &g_textureBoundsRight);
     return 0;
@@ -411,22 +492,26 @@ LUA_FUNCTION(Shutdown) {
         vr::VR_Shutdown();
         g_pSystem = NULL;
     }
-    if (g_d3d11Device != NULL) {
-        g_d3d11Device->Release();
-        g_d3d11Device = NULL;
-    }
     for(int i = 0; i < g_luaRefCount; i++)
         LUA->ReferenceFree(g_luaRefs[i]);
     g_luaRefCount = 0;
     for(int i = 0; i < g_actionCount; i++)
         for(int j = 0; j < 2; j++)
             LUA->ReferenceFree(g_actions[i].luaRefs[j]);
-    g_d3d11Texture = NULL;
-    g_sharedTexture = NULL;
     g_actionCount = 0;
     g_actionSetCount = 0;
     g_activeActionSetCount = 0;
+#ifdef _WIN32
+    if (g_d3d11Device != NULL) {
+        g_d3d11Device->Release();
+        g_d3d11Device = NULL;
+    }
+    g_d3d11Texture = NULL;
     g_pD3D9Device = NULL;
+    g_sharedTexture = NULL;
+#else
+    g_sharedTexture = GL_INVALID_VALUE;
+#endif
     return 0;
 }
 
