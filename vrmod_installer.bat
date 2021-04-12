@@ -76,9 +76,21 @@ exit
 echo Uninstalling...
 del "%gmod_dir%\garrysmod\lua\bin\gmcl_vrmod_win32.dll"
 del "%gmod_dir%\garrysmod\lua\bin\gmcl_vrmod_win64.dll"
+del "%gmod_dir%\garrysmod\lua\bin\gmcl_vrmod_linux.dll"
+del "%gmod_dir%\garrysmod\lua\bin\gmcl_vrmod_linux64.dll"
 del "%gmod_dir%\garrysmod\lua\bin\update_vrmod.bat"
 del "%gmod_dir%\bin\openvr_api.dll"
 del "%gmod_dir%\bin\openvr_license"
+del "%gmod_dir%\bin\libopenvr_api.so"
+del "%gmod_dir%\bin\linux32\libopenvr_api.so"
+del "%gmod_dir%\bin\linux64\libopenvr_api.so"
 del "%gmod_dir%\bin\win64\openvr_api.dll"
+del "%gmod_dir%\bin\win64\HTC_License"
+del "%gmod_dir%\bin\win64\libHTC_License.dll"
+del "%gmod_dir%\bin\win64\nanomsg.dll"
+del "%gmod_dir%\bin\win64\SRanipal.dll"
+del "%gmod_dir%\bin\win64\SRWorks_Log.dll"
+del "%gmod_dir%\bin\win64\ViveSR_Client.dll"
+
 echo Done
 pause
