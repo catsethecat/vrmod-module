@@ -24,13 +24,22 @@ echo Download complete (if there are no errors above). Press any key to attempt 
 pause
 
 :build
-	
-set CompilerFlags= -MT -nologo -Oi -O2 -W3 /I..\..\..\..\..\deps
-set LinkerFlags= -INCREMENTAL:NO -opt:ref d3d11.lib USER32.LIB /LIBPATH:..\..\..\..\..\deps\openvr /DLL
+
+if exist deps\sranipal\ (
+    set SRanipalDefine=/DVRMOD_USE_SRANIPAL
+) else (
+    echo.
+    echo NOTE: deps\sranipal\ not found, continuing without.
+    echo to build with sranipal support, get the SDK from the Vive website and add the header and lib files directly into the aforementioned folder
+    echo.
+)
+
+set CompilerFlags= -MT -nologo -Oi -O2 -W3 /wd4996 /I..\..\..\..\..\deps
+set LinkerFlags= -INCREMENTAL:NO -opt:ref d3d11.lib USER32.LIB /LIBPATH:..\..\..\..\..\deps\openvr /LIBPATH:..\..\..\..\..\deps\sranipal /DLL
 	
 pushd install\GarrysMod\garrysmod\lua\bin
 call %vcvarsallpath% x64
-cl %CompilerFlags% ..\..\..\..\..\src\vrmod.cpp /link %LinkerFlags% openvr_api_win64.lib /out:gmcl_vrmod_win64.dll
+cl %CompilerFlags% %SRanipalDefine% ..\..\..\..\..\src\vrmod.cpp /link %LinkerFlags% openvr_api_win64.lib /out:gmcl_vrmod_win64.dll
 call %vcvarsallpath% x86
 cl %CompilerFlags% ..\..\..\..\..\src\vrmod.cpp /link %LinkerFlags% openvr_api_win32.lib /out:gmcl_vrmod_win32.dll
 del gmcl_vrmod_win64.exp
