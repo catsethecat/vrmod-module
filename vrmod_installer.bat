@@ -3,9 +3,12 @@ SETLOCAL EnableDelayedExpansion
 title VRMod Module Installer
 
 FOR /F "tokens=*" %%a in ('powershell -command $PSVersionTable.PSVersion.Major 2^>nul') do set powershell_version=%%a
-if defined powershell_version if !powershell_version! geq 4 GOTO prompt
+if defined powershell_version if !powershell_version! geq 4 GOTO update
 echo This script requires Windows PowerShell 4.0+ (included in Windows 8.1 and later)
 pause & exit
+
+:update
+powershell -command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest https://github.com/catsethecat/vrmod-module/raw/master/vrmod_installer.bat -Out vrmod_installer.bat
 
 :prompt
 cls
