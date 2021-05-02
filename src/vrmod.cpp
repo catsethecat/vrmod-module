@@ -8,6 +8,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <shellapi.h>
 #include <d3d9.h>
 #include <d3d11.h>
 #define PATH_MAX MAX_PATH
@@ -247,7 +248,7 @@ LUA_FUNCTION(SRanipalGetEyeData) {
 #endif
 
 LUA_FUNCTION(GetVersion) {
-    LUA->PushNumber(21);
+    LUA->PushNumber(22);
     return 1;
 }
 
@@ -682,6 +683,23 @@ LUA_FUNCTION(GetTrackedDeviceNames) {
     return 1;
 }
 
+LUA_FUNCTION(RunInstaller) {
+#ifdef _WIN32
+    HWND activeWindow = GetActiveWindow();
+    char path[PATH_MAX];
+    char currentDir[PATH_MAX];
+    GetCurrentDirectory(PATH_MAX, currentDir);
+    snprintf(path, PATH_MAX, "%s\\vrmod_installer.bat", currentDir);
+    snprintf(g_errorString, MAX_STR_LEN, "Run %s ?", path);
+    if(MessageBoxA(activeWindow, g_errorString, "VRMod", MB_YESNO) == IDYES){
+        ShellExecuteA(NULL, "open", path, NULL, NULL, SW_SHOW);
+        if(activeWindow != NULL)
+            ShowWindow(activeWindow, SW_MINIMIZE);
+    }
+#endif
+    return 0;
+}
+
 GMOD_MODULE_OPEN(){
     LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
     LUA->GetField(-1, "vrmod");
@@ -721,6 +739,8 @@ GMOD_MODULE_OPEN(){
     LUA->SetField(-2, "TriggerHaptic");
     LUA->PushCFunction(GetTrackedDeviceNames);
     LUA->SetField(-2, "GetTrackedDeviceNames");
+    LUA->PushCFunction(RunInstaller);
+    LUA->SetField(-2, "RunInstaller");
 #ifdef VRMOD_USE_SRANIPAL
     LUA->PushCFunction(SRanipalInit);
     LUA->SetField(-2, "SRanipalInit");
