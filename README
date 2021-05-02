@@ -14,7 +14,8 @@ Description: Returns true if a VR headset is connected
 
 Function: vrmod.Init()
 Description: Starts OpenVR and performs some initialization.
-This must be called successfully before using any of the functions listed below.
+This must be called successfully before using any of the functions listed below (apart
+from vrmod.Shutdown which can be called at any time to ensure a clean state).
 You must call vrmod.Shutdown() before calling this again.
 
 Function: vrmod.Shutdown()
@@ -117,7 +118,8 @@ tracked devices. For example:
 Function: number, number vrmod.SRanipalInit()
 Description: Initializes SRanipal eye and facial tracking engines. The return values
 are initialization error codes, first one is for eye tracking, second for facial
-tracking. Code 0 means the respective engine was started successfully.
+tracking. Code 0 means the engine was started successfully. This function and the other
+SRanipal functions might not exist if the module was built without SRanipal support.
 
 Function: table, table vrmod.SRanipalGetEyeData()
 Description: Returns tables containing SRanipal eye tracking output. The first table is
