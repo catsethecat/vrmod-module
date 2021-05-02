@@ -35,7 +35,7 @@ if exist deps\sranipal\ (
 )
 
 set CompilerFlags= -MT -nologo -Oi -O2 -W3 /wd4996 /I..\..\..\..\..\deps
-set LinkerFlags= -INCREMENTAL:NO -opt:ref d3d11.lib USER32.LIB /LIBPATH:..\..\..\..\..\deps\openvr /LIBPATH:..\..\..\..\..\deps\sranipal /DLL
+set LinkerFlags= -INCREMENTAL:NO -opt:ref d3d11.lib USER32.LIB Shell32.lib /LIBPATH:..\..\..\..\..\deps\openvr /LIBPATH:..\..\..\..\..\deps\sranipal /DLL
 	
 pushd install\GarrysMod\garrysmod\lua\bin
 call %vcvarsallpath% x64
