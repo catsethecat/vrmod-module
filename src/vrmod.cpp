@@ -263,7 +263,7 @@ LUA_FUNCTION(Init) {
     vr::HmdError error = vr::VRInitError_None;
     g_pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
     if (error != vr::VRInitError_None) {
-        snprintf(g_errorString, MAX_STR_LEN, "VR_Init failed: %i", error);
+        snprintf(g_errorString, MAX_STR_LEN, "VR_Init failed: %s", vr::VR_GetVRInitErrorAsEnglishDescription(error));
         LUA->ThrowError(g_errorString);
     }
     if (!vr::VRCompositor())
