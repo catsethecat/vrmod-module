@@ -115,19 +115,6 @@ tracked devices. For example:
   3 = "knuckles"
 }
 
-Function: number, number vrmod.SRanipalInit()
-Description: Initializes SRanipal eye and facial tracking engines. The return values
-are initialization error codes, first one is for eye tracking, second for facial
-tracking. Code 0 means the engine was started successfully. This function and the other
-SRanipal functions might not exist if the module was built without SRanipal support.
-
-Function: table, table vrmod.SRanipalGetEyeData()
-Description: Returns tables containing SRanipal eye tracking output. The first table is
-for the left eye, second is for the right eye.
-
-Function: table vrmod.SRanipalGetLipData()
-Description: Returns a table containing SRanipal facial tracking output.
-
 #######################################################################################
 # Compiling
 #######################################################################################
