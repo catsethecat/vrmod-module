@@ -29,10 +29,17 @@ set CompilerFlags= -MT -nologo -Oi -O2 -W3 /wd4996 /I..\..\..\..\..\deps
 set LinkerFlags= -INCREMENTAL:NO -opt:ref d3d11.lib USER32.LIB Shell32.lib /LIBPATH:..\..\..\..\..\deps\openvr /DLL
 	
 pushd install\GarrysMod\garrysmod\lua\bin
+
+setlocal
 call %vcvarsallpath% x64
 cl %CompilerFlags% ..\..\..\..\..\src\vrmod.cpp /link %LinkerFlags% openvr_api_win64.lib /out:gmcl_vrmod_win64.dll
+endlocal
+
+setlocal
 call %vcvarsallpath% x86
 cl %CompilerFlags% ..\..\..\..\..\src\vrmod.cpp /link %LinkerFlags% openvr_api_win32.lib /out:gmcl_vrmod_win32.dll
+endlocal
+
 del gmcl_vrmod_win64.exp
 del gmcl_vrmod_win64.lib
 del gmcl_vrmod_win32.exp
