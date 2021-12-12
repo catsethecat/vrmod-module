@@ -128,14 +128,14 @@ LUA_FUNCTION(IsHMDPresent) {
 }
 
 LUA_FUNCTION(IsInitialized) {
-	LUA->PushBool(g_vrInitialized);
-	return 1;
+    LUA->PushBool(g_vrInitialized);
+    return 1;
 }
 
 LUA_FUNCTION(Init) {
     if (g_vrInitialized) {
-		LUA->ThrowError("Already initialized");
-	}
+        LUA->ThrowError("Already initialized");
+    }
 	
     vr::HmdError error = vr::VRInitError_None;
     g_pSystem = vr::VR_Init(&error, vr::VRApplication_Scene);
@@ -182,12 +182,12 @@ LUA_FUNCTION(Init) {
 # endif
 #endif
 
-	g_vrInitialized = true;
+    g_vrInitialized = true;
     return 0;
 }
 
 LUA_FUNCTION(SetActionManifest) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -249,7 +249,7 @@ LUA_FUNCTION(SetActionManifest) {
 }
 
 LUA_FUNCTION(SetActiveActionSets) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -295,7 +295,7 @@ void PushMatrixAsTable(GarrysMod::Lua::ILuaBase* LUA, float* mtx, unsigned int r
 }
 
 LUA_FUNCTION(GetDisplayInfo) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -325,7 +325,7 @@ LUA_FUNCTION(GetDisplayInfo) {
 }
 
 LUA_FUNCTION(UpdatePosesAndActions) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -335,7 +335,7 @@ LUA_FUNCTION(UpdatePosesAndActions) {
 }
 
 LUA_FUNCTION(GetPoses) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -387,7 +387,7 @@ LUA_FUNCTION(GetPoses) {
 }
 
 LUA_FUNCTION(GetActions) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -448,7 +448,7 @@ LUA_FUNCTION(GetActions) {
 }
 
 LUA_FUNCTION(ShareTextureBegin) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -474,7 +474,7 @@ LUA_FUNCTION(ShareTextureBegin) {
 }
 
 LUA_FUNCTION(ShareTextureFinish) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -513,7 +513,7 @@ LUA_FUNCTION(SetSubmitTextureBounds) {
 }
 
 LUA_FUNCTION(SubmitSharedTexture) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -560,12 +560,12 @@ LUA_FUNCTION(Shutdown) {
     g_sharedTexture = GL_INVALID_VALUE;
 #endif
 
-	g_vrInitialized = false;
+    g_vrInitialized = false;
     return 0;
 }
 
 LUA_FUNCTION(TriggerHaptic) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -580,7 +580,7 @@ LUA_FUNCTION(TriggerHaptic) {
 }
 
 LUA_FUNCTION(GetTrackedDeviceNames) {
-	if (!g_vrInitialized) {
+    if (!g_vrInitialized) {
         LUA->ThrowError("The VR device is not initialized");
     }
 	
@@ -622,8 +622,8 @@ GMOD_MODULE_OPEN(){
         LUA->Pop(1);
         LUA->CreateTable();
     }
-	LUA->PushCFunction(IsInitialized);
-	LUA->SetField(-2, "IsInitialized");
+    LUA->PushCFunction(IsInitialized);
+    LUA->SetField(-2, "IsInitialized");
     LUA->PushCFunction(GetVersion);
     LUA->SetField(-2, "GetVersion");
     LUA->PushCFunction(IsHMDPresent);
