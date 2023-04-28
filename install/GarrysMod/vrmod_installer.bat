@@ -20,15 +20,18 @@ if not defined steam_dir (
 	exit
 )
 if exist "%steam_dir%\steamapps\appmanifest_4000.acf" set "gmod_dir=%steam_dir%\steamapps\common\GarrysMod"
-for /f "usebackq tokens=2 skip=4" %%A in ("%steam_dir%\steamapps\libraryfolders.vdf") do (
-  if exist "%%~A\steamapps\appmanifest_4000.acf" set "gmod_dir=%%~A\steamapps\common\GarrysMod"
+for /f "usebackq tokens=2,3,4 skip=4" %%A in ("%steam_dir%\steamapps\libraryfolders.vdf") do (
+    if exist "%%~A\steamapps\appmanifest_4000.acf" set "gmod_dir=%%~A\steamapps\common\GarrysMod"
+    if exist "%%~A %%~B\steamapps\appmanifest_4000.acf" set "gmod_dir=%%~A %%~B\steamapps\common\GarrysMod"
+    if exist "%%~A %%~B %%~C\steamapps\appmanifest_4000.acf" set "gmod_dir=%%~A %%~B %%~C\steamapps\common\GarrysMod"
 )
 if not defined gmod_dir (
 	echo "GMod installation path not found"
 	pause
 	exit
+) else (
+	set "gmod_dir=%gmod_dir:"=%"
 )
-
 echo Game folder: %gmod_dir%
 echo Make sure Garry's Mod is not running before proceeding.
 echo.
